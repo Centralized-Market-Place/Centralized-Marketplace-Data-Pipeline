@@ -1,1 +1,4 @@
 venv/
+config/secrets.env
+data/logs/
+.env
