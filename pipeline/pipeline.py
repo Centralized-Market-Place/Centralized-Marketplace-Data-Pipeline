@@ -10,7 +10,7 @@ def run_pipeline():
     messages = fetch_messages()
     
     print("Messages fetched successfully.")
-    print(messages[:5])
+    # print(messages)
     # processed = [extract_features(msg) for msg in messages]
     # save_to_database(processed)
     print("Pipeline executed successfully.")

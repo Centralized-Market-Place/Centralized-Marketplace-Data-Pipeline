@@ -1,5 +1,6 @@
-pyrogram
+telethon
 psycopg2-binary
 APScheduler
 PyYAML
 python-dotenv
+python-telegram-bot
