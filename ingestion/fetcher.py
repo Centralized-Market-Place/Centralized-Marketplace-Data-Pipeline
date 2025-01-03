@@ -5,7 +5,7 @@ from ingestion.constants import CHANNEL_IDS
 from telethon.tl.functions.channels import JoinChannelRequest
 from telethon.tl.custom.message import Message
 from storage.store import store_raw_data
-
+from collections import defaultdict
 
 api_id = "21879721"
 api_hash = "cadd93c819128f73ba3439a0f430e677"
@@ -23,20 +23,20 @@ def fetch_messages():
         await client(JoinChannelRequest(channel))
 
     async def get_messages():
-        last_fetched = 0
+        last_fetched = defaultdict(int)
         await asyncio.sleep(2)
         await client.start()
         print('Fetching messages')
         for channel_id in CHANNEL_IDS:
             await asyncio.sleep(2)  # Rate limiting
-            if last_fetched:
-                async for message in client.iter_messages(channel_id, limit=BATCH_SIZE, offset_id=last_fetched):
+            if last_fetched[channel_id]:
+                async for message in client.iter_messages(channel_id, limit=BATCH_SIZE, offset_id=last_fetched[channel_id]):
                     messages.append(message)
-                last_fetched = messages[-1].id
+                last_fetched[channel_id] = messages[-1].id
             else:
                 async for message in client.iter_messages(channel_id, limit=BATCH_SIZE):
                     messages.append(message)
-                last_fetched = messages[-1].id
+                last_fetched[channel_id] = messages[-1].id
 
         print('Fetch completed!')
         print(last_fetched)

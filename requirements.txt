@@ -4,3 +4,4 @@ APScheduler
 PyYAML
 python-dotenv
 python-telegram-bot
+pymongo
