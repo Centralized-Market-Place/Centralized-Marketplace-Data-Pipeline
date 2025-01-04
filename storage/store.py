@@ -5,11 +5,11 @@ MONGO_URI="mongodb+srv://semahegnsahib:sahib@cluster0.vmyk3.mongodb.net/?retryWr
 DATABASE_NAME="centeral_marketplace"
 # config = dotenv_values('secrets.env')
 
-def store_raw_data(raw_data):
+def store_raw_data(raw_data, collection_name='raw_data'):
     try:
         mongo_client = MongoClient(MONGO_URI)
         db = mongo_client[DATABASE_NAME]
-        collection = db['raw_data']
+        collection = db[collection_name]
         for datum in raw_data:
             collection.insert_one(datum)
         return True

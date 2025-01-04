@@ -14,7 +14,7 @@ api_hash = "cadd93c819128f73ba3439a0f430e677"
 
 BATCH_SIZE = 10
 
-def fetch_messages():
+def fetch_messages(factor=10):
     print('Loading Client')
     client = TelegramClient('telegram_client', api_id, api_hash)
     messages = []
@@ -27,19 +27,28 @@ def fetch_messages():
         await asyncio.sleep(2)
         await client.start()
         print('Fetching messages')
-        for channel_id in CHANNEL_IDS:
-            await asyncio.sleep(2)  # Rate limiting
-            if last_fetched[channel_id]:
-                async for message in client.iter_messages(channel_id, limit=BATCH_SIZE, offset_id=last_fetched[channel_id]):
-                    messages.append(message)
-                last_fetched[channel_id] = messages[-1].id
-            else:
-                async for message in client.iter_messages(channel_id, limit=BATCH_SIZE):
-                    messages.append(message)
-                last_fetched[channel_id] = messages[-1].id
+        for i in range(factor):
+            for channel_id in CHANNEL_IDS:
+                await asyncio.sleep(2)  # Rate limiting
+                if last_fetched[channel_id]:
+                    async for message in client.iter_messages(channel_id, limit=BATCH_SIZE, offset_id=last_fetched[channel_id]):
+                        messages.append(message)
+                    if messages:
+                        last_fetched[channel_id] = messages[-1].id
+                else:
+                    async for message in client.iter_messages(channel_id, limit=BATCH_SIZE):
+                        messages.append(message)
+                    if messages:
+                        last_fetched[channel_id] = messages[-1].id
+                await asyncio.sleep(2)
+                print(f"fetch {i} from {channel_id} completed.")
+            await asyncio.sleep(6)
 
         print('Fetch completed!')
         print(last_fetched)
+        # Store last fetched info in database
+        last_fetched_info = [{"channel_id": channel_id, "last_fetched_id": last_fetched[channel_id]} for channel_id in last_fetched]
+        store_raw_data(last_fetched_info, collection_name="last_fetched_info")
         await client.disconnect()
 
     client.loop.run_until_complete(get_messages())
@@ -48,7 +57,7 @@ def fetch_messages():
     messages_json = [json.loads(message.to_json()) for message in messages]
 
     # Store messages in MongoDB
-    stored = store_raw_data(messages_json)
+    stored = store_raw_data(messages_json, collection_name="raw_data")
     if not stored:
         print('Storage failed !!!!!')
     return messages_json
@@ -59,45 +68,3 @@ def filter_messages(messages):
 
 
 
-
-
-# from pyrogram import Client
-# from ingestion.constants import CHANNEL_IDS
-# from telegram import Bot
-# from telegram.ext import Updater
-
-
-# def fetch_messages():
-#     print('Loading Client')
-#     with Client("telegram_client", api_id="25653559", api_hash="77ddfa0bb95b50d5b2a313e880fd6ec2") as app:
-#         messages = []
-#         print('Fetching messages')
-#         for channel_id in CHANNEL_IDS:
-#             for message in app.get_chat_history(channel_id, limit=100):
-#                 messages.append(message)
-        
-#         print('Fetch completed!')
-#         return messages
-    
-
-# def filter_messages(messages):
-#     filtered = [] # todo
-#     return filtered
-
-
-
-# def fetch_messages2():
-#     print('Loading Bot')
-#     bot = Bot(token="YOUR_BOT_TOKEN")
-#     updater = Updater(bot=bot, use_context=True)
-#     messages = []
-#     print('Fetching messages')
-    
-#     for channel_id in CHANNEL_IDS:
-#         updates = bot.get_updates()
-#         for update in updates:
-#             if update.channel_post and update.channel_post.chat.id == channel_id:
-#                 messages.append(update.channel_post)
-    
-#     print('Fetch completed!')
-#     return messages
