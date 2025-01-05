@@ -49,14 +49,17 @@ def fetch_messages(factor=10):
         # Store last fetched info in database
         last_fetched_info = [{"channel_id": channel_id, "last_fetched_id": last_fetched[channel_id]} for channel_id in last_fetched]
         store_raw_data(last_fetched_info, collection_name="last_fetched_info")
+        print("Last fetched info stored.")
         await client.disconnect()
 
     client.loop.run_until_complete(get_messages())
 
     # Convert messages to JSON
+    print('Decoding messages into JSON...')
     messages_json = [json.loads(message.to_json()) for message in messages]
-
+    print('Messages decoded!')
     # Store messages in MongoDB
+    print('Writing messages to database...')
     stored = store_raw_data(messages_json, collection_name="raw_data")
     if not stored:
         print('Storage failed !!!!!')
