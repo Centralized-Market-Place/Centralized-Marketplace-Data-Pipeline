@@ -35,7 +35,7 @@ def fetch_messages(factor=10):
         print("Fetching messages")
 
         # 1) Fetch messages
-        for i in range(1):
+        for i in range(factor):
             for channel_id in CHANNEL_IDS:
                 await asyncio.sleep(2)
                 if last_fetched[channel_id]:
