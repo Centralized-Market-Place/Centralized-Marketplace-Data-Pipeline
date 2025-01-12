@@ -17,5 +17,16 @@ def store_raw_data(raw_data, collection_name='raw_data'):
         print(str(e))
     return False
 
+def fetch_stored_messages(collection_name='raw_data'):
+    try:
+        mongo_client = MongoClient(MONGO_URI)
+        db = mongo_client[DATABASE_NAME]
+        collection = db[collection_name]
+        messages = list(collection.find())
+        return messages
+    except Exception as e:
+        print(str(e))
+    return []
+
 def store_decoded(data):
     pass
