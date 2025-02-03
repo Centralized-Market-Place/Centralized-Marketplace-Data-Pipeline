@@ -1,42 +1,38 @@
 """
-Products Collection
 {
-  "_id": ObjectId("5f4e9b6b9a1d3b23d4f9e9a6"),
-  "GroupID": ObjectId("5f4e9b6b9a1d3b23d4f9e9a4"),
-  "Title": "Smartphone XYZ",
-  "Description": "A top-notch smartphone with great features.",
-  "Price": 499.99,
-  "PostDate": ISODate("2021-12-10T12:00:00Z"),
-  "Status": "Available",
-  "ProductImageURLs": ["https://example.com/product_image.jpg"]
+    'raw_id': '677923255b460df5b5cb3c78', # raw data id in mongo atlas
+    'message_id': 1848,
+    'channel_id': 1293830821,
+    'date': '2024-11-19T08:34:55+00:00',
+    'message': 'lorem ipsum',
+    'forwards': 50,
+    'views': 5617,
+    'reactions': [('👍', 15), ('❤', 3)],
 }
 
 
-ProductCategories Collection (Many-to-Many Relationship)
-{
-  "_id": ObjectId("unique_link_id"),
-  "product": ObjectId("product_id"),
-  "category": ObjectId("category_id")
-}
+
+@dataclass
+class Product:
+    # id: str = field(default_factory=lambda: str(ObjectId())) 
+    # name: Optional[str] = None
+    description: Optional[str] = None
+    # summary: Optional[str] = None
+    # price: Optional[float] = None
+    categories: list[Category] = field(default_factory=list)
+    # is_available: Optional[bool] = True
+    # images: list[str] = field(default_factory=list)
+    created_at: datetime = field(default_factory=datetime.utcnow)
+    updated_at: datetime = field(default_factory=datetime.utcnow)
+    channel_id: str
+    posted_at: Optional[datetime] = None
 
 
-TelegramGroupChannel Collection
-{
-  "_id" : ObjectId(),   "Name": "Name of the group/channel",
-  "GroupLink" : "Link to access the group/channel",
-  "AdminContact" : "Contact information of the group admin",
-  "VerifiedStatus ": "Whether the group/channel is verified",
-  "Rating" : "Average rating of the group/channel",
-  "ListingsCount" : "Number of products listed in the group",
-  "MembersCount" : "Number of members in the group/channel",
-  "GroupPicture" : "Profile picture of the group/channel",
-  "Bio" : "Description or bio of the group/channel",
-  "PostsPerDay" : "Average number of posts per day in the group",
-  "LastMessage" : "Date of the last message in the group"
-}
+
 
 """
-from storage.store import fetch_stored_messages, store_raw_data
+from storage.store import fetch_stored_messages, store_raw_data, store_latest_and_oldest_ids, store_products
+from tqdm import tqdm
 
 
 def preprocess():
@@ -51,7 +47,38 @@ def preprocess():
     stored = store_raw_data(preprocessed, collection_name="stage1_preprocessed_data")
     print('Success!' if stored else 'Fail!')
 
+def extract_oldest_and_latest_ids():
+    stored_messages = fetch_stored_messages(collection_name="raw_data")
+    oldest_id = {}
+    latest_id = {}
 
+    for raw_message in tqdm(stored_messages, desc="Processing raw messages"):
+        filted_message = extract_message_data(raw_message)
+        if not filted_message:
+            continue
+        message_id = filted_message.get('message_id')
+        channel_id = filted_message.get('channel_id')
+        
+        if channel_id not in oldest_id:
+            oldest_id[channel_id] = message_id
+            latest_id[channel_id] = message_id
+        else:
+            oldest_id[channel_id] = min(oldest_id[channel_id], message_id)
+            latest_id[channel_id] = max(latest_id[channel_id], message_id)
+
+    storage = store_latest_and_oldest_ids(latest_id, oldest_id)
+    if not storage:
+        print('Oldest-Latest ids storage failed!')
+    else:
+        print('Oldest-Latest ids stored successfully!')
+            
+        
+
+def create_channel(channel_data):
+    pass
+
+def create_product(product_data):
+    pass
 
 def extract_message_data(message_obj):
     """
@@ -105,3 +132,24 @@ def extract_message_data(message_obj):
     except:
         return None
 
+
+def insert_into_products_collection():
+    print('Fetching from database... stage 1 preprocessed data')
+    stored_messages = fetch_stored_messages(collection_name="stage1_preprocessed_data")
+    products = []
+    seen_messages = set()
+    for message in tqdm(stored_messages, desc="Processing messages into Products"):
+        if message['message_id'] in seen_messages:
+            continue
+        seen_messages.add(message['message_id'])
+        message.pop('raw_id')
+        
+        date = message.pop('date')
+        message['posted_at'] = date
+        
+        desc = message.pop('message')
+        message['description'] = desc
+        products.append(message)
+        
+    stored = store_products(products)
+    print('Failed to store products!' if not stored else f'{len(products)} products stored successfully!' )

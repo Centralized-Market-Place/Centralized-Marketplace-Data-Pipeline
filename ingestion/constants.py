@@ -6,12 +6,20 @@
 #                 "@birukcomputersandlaptops",
 #                 "@misgetechno"
 #                 ]
+#
+CHANNEL_IDS = ["@samcomptech",
+               "@dagilaptop",
+               "@beracomputer"
+               ]
 
+# CHANNEL_IDS = [
+#                "@dagilaptop"
+#                ]
 
-CHANNEL_IDS = [
-    "@Shewabrand",
-    "@bros_fashionn",
-    "@brandsonlymart",
-    "@fash1onweek",
-    "@FashionforwardbyDinah"
-]
+# CHANNEL_IDS = [
+#     "@Shewabrand",
+#     "@bros_fashionn",
+#     "@brandsonlymart",
+#     "@fash1onweek",
+#     "@FashionforwardbyDinah"
+# ]
