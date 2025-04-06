@@ -5,6 +5,7 @@ import asyncio
 import cloudinary
 from tqdm import tqdm
 import cloudinary.uploader
+from datetime import datetime
 from collections import defaultdict
 from telethon import TelegramClient
 from telethon.tl.types import PeerChannel
@@ -13,8 +14,7 @@ from telethon.tl.custom.message import Message
 from ingestion.constants import CHANNEL_IDS, ALL_CHANNEL_IDS, NEW_CHANNEL_IDS
 from telethon.tl.functions.channels import JoinChannelRequest, GetFullChannelRequest
 from storage.store import store_raw_data, fetch_stored_messages, store_products, store_channels, store_latest_and_oldest_ids
-import os
-
+from storage.store import insert_document, update_document, delete_document, find_documents
 
 # telegram
 API_ID = os.getenv("API_ID", "")
@@ -33,26 +33,90 @@ cloudinary.config(
     api_secret=API_SECRET,
     secure=True
 )
-
+# Storage limit in bytes (Free tier = 1GB)
+CLOUDINARY_STORAGE_LIMIT = 751106637 # 1073741824 without existing images
 
 #=========================== messages ============================
 
+async def check_and_evict(required_space=0):
+    """Check storage and evict LRU assets if needed"""
+    usage = await asyncio.to_thread(cloudinary.api.usage)
+    current_storage = usage["storage"]["usage"]
+    
+    needed = current_storage + required_space - CLOUDINARY_STORAGE_LIMIT
+    if needed <= 0:
+        return True
 
-# cloudinary
-async def evict_asset():
-    pass
+    print(f"Storage overage detected. Need to free {needed} bytes")
 
-# cloudinary
-async def evict_and_insert_asset():
-    pass
+    lru_assets = find_documents("cloudinary_assets", sort_field="last_accessed", sort_order=1)
+    total_freed = 0
 
+    for asset in lru_assets:
+        if total_freed >= needed:
+            break
+
+        try:
+            await asyncio.to_thread(
+                cloudinary.uploader.destroy, 
+                asset["public_id"],
+                invalidate=True
+            )
+            delete_document("cloudinary_assets", {"_id": asset["_id"]})
+            total_freed += asset["size"]
+            print(f"Evicted: {asset['public_id']} ({asset['size']} bytes)")
+        except Exception as e:
+            print(f"Failed to evict {asset['public_id']}: {str(e)}")
+
+    print(f"Total freed: {total_freed} bytes")
+    return total_freed >= needed
+
+async def upload_with_eviction(file_path, asset_type="post_photo"):
+    """Upload file with LRU eviction when needed"""
+    try:
+        file_size = os.path.getsize(file_path)
+        
+        success = await check_and_evict(file_size)
+        if not success:
+            print("Insufficient storage after eviction")
+            return None
+
+        upload_result = await asyncio.to_thread(
+            cloudinary.uploader.upload,
+            file_path,
+            folder=asset_type
+        )
+
+        asset_data = {
+            "public_id": upload_result["public_id"],
+            "url": upload_result["secure_url"],  # Using secure_url for public display
+            "uploaded_at": datetime.now(),
+            "last_accessed": datetime.now(),
+            "size": upload_result["bytes"],
+            "type": asset_type
+        }
+        insert_document("cloudinary_assets", asset_data)
+
+        return upload_result["secure_url"]  # Returning secure_url for public display
+    
+    except Exception as e:
+        print(f"Upload failed: {str(e)}")
+        return None
+
+async def update_last_accessed(public_id):
+    """Update access time when serving assets"""
+    update_document(
+        "cloudinary_assets",
+        {"public_id": public_id},
+        {"last_accessed": datetime.now()}
+    )
 
 async def download_images(messages, tg_client):
     grouped_messages = defaultdict(list)
     images = defaultdict(list)
     
     # to be removed
-    return images
+    # return images
 
     for message in tqdm(messages, desc="Downloading Single Photos: "):
         await asyncio.sleep(2)  # Rate limit
@@ -63,11 +127,11 @@ async def download_images(messages, tg_client):
         elif message.media and hasattr(message.media, 'photo'):  # Single photo
             file = await tg_client.download_media(message.media)
             if file:
-                response = cloudinary.uploader.upload(file)
-                if response:
+                url = await upload_with_eviction(file)
+                if url:
                     channel_id = message.peer_id.channel_id if isinstance(message.peer_id, PeerChannel) else None
                     if channel_id:
-                        images[(channel_id, message.id)].append(response['url'])
+                        images[(channel_id, message.id)].append(url)
                 else:
                     print(f"Failed to upload image for message ID {message.id}")
                 os.remove(file)
@@ -81,12 +145,12 @@ async def download_images(messages, tg_client):
                 await asyncio.sleep(2)  # Rate limit
                 file = await tg_client.download_media(grouped_msg.media)
                 if file:
-                    response = cloudinary.uploader.upload(file)
-                    if response:
+                    url = await upload_with_eviction(file)
+                    if url:
                         # Use channel_id and grouped_msg.id as the key for grouping
                         channel_id = grouped_msg.peer_id.channel_id if isinstance(grouped_msg.peer_id, PeerChannel) else None
                         if channel_id:
-                            images[(channel_id, grouped_id)].append(response['url'])
+                            images[(channel_id, grouped_id)].append(url)
                     else:
                         print(f"Failed to upload image for grouped message ID {grouped_msg.id}")
                     os.remove(file)
@@ -98,7 +162,7 @@ async def download_images(messages, tg_client):
 
 
 # look into the limit
-async def fetch_unread_messages(channel_username, last_fetched_id, tg_client, limit=30, delay=2, round=4): # 4*30*30 = 3600
+async def fetch_unread_messages(channel_username, last_fetched_id, tg_client, limit=5, delay=2, round=1): # 4*30*30 = 3600
     """Fetch unread messages from the specified Telegram channel"""
 
     messages = []
@@ -172,22 +236,25 @@ def extract_message_data(message_obj):
         views = message_obj.get('views', 0)
         images = message_obj.get('images', [])
 
-
+        
         reactions_data = []
-        reactions = message_obj.get('reactions', [])
-        if isinstance(reactions, list):
-            for reaction in reactions:
-                if isinstance(reaction, list) and len(reaction) == 2:
-                    emoji, count = reaction
-                    reactions_data.append((emoji, count))
-        else:
-            results = reactions.get('results', [])
-            for reaction in results:
-                emoji = reaction.get('reaction', {}).get('emoticon', '')
-                count = reaction.get('count', 0)
-                if emoji:
-                    reactions_data.append((emoji, count))
-
+        try:
+            reactions = message_obj.get('reactions', [])
+            if isinstance(reactions, list):
+                for reaction in reactions:
+                    if isinstance(reaction, list) and len(reaction) == 2:
+                        emoji, count = reaction
+                        reactions_data.append((emoji, count))
+            else:
+                results = reactions.get('results', [])
+                for reaction in results:
+                    emoji = reaction.get('reaction', {}).get('emoticon', '')
+                    count = reaction.get('count', 0)
+                    if emoji:
+                        reactions_data.append((emoji, count))
+        except Exception as e:
+            print(f"Error extracting reactions: {e}")
+            
         return {
             'message_id': message_id,
             'channel_id': channel_id,

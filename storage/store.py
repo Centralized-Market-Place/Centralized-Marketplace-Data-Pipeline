@@ -6,11 +6,11 @@ from datetime import datetime, timezone
 MONGO_URI="mongodb+srv://semahegnsahib:sahib@cluster0.vmyk3.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
 DATABASE_NAME="centeral_marketplace"
 # config = dotenv_values('secrets.env')
+mongo_client = MongoClient(MONGO_URI)
+db = mongo_client[DATABASE_NAME]
 
 def store_raw_data(raw_data, collection_name='raw_data'):
     try:
-        mongo_client = MongoClient(MONGO_URI)
-        db = mongo_client[DATABASE_NAME]
         collection = db[collection_name]
         for datum in tqdm(raw_data, desc="Storing row data: "):
             collection.insert_one(datum)
@@ -21,8 +21,6 @@ def store_raw_data(raw_data, collection_name='raw_data'):
 
 def fetch_stored_messages(collection_name='raw_data'):
     try:
-        mongo_client = MongoClient(MONGO_URI)
-        db = mongo_client[DATABASE_NAME]
         collection = db[collection_name]
         messages = list(collection.find())
         return messages
@@ -37,8 +35,6 @@ def store_decoded(data):
 
 def store_products(products):
     try:
-        mongo_client = MongoClient(MONGO_URI)
-        db = mongo_client[DATABASE_NAME]
         collection = db['products']
         for product in tqdm(products, desc="Storing products: "):
             # product['created_at'] = str(datetime.now())
@@ -52,8 +48,6 @@ def store_products(products):
 
 def store_product(product):
     try:
-        mongo_client = MongoClient(MONGO_URI)
-        db = mongo_client[DATABASE_NAME]
         collection = db['products']
         product['created_at'] = str(datetime.utcnow())
         product['updated_at'] = str(datetime.utcnow())
@@ -66,8 +60,6 @@ def store_product(product):
 
 def store_latest_and_oldest_ids(latest_ids, oldest_ids):
     try:
-        mongo_client = MongoClient(MONGO_URI)
-        db = mongo_client[DATABASE_NAME]
         collection = db['latest_channel_posts']
         
         for channel_id, message_id in tqdm(latest_ids.items(), desc="Storing latest IDs"):
@@ -84,8 +76,6 @@ def store_latest_and_oldest_ids(latest_ids, oldest_ids):
 
 def store_channels(channels):
     try:
-        mongo_client = MongoClient(MONGO_URI)
-        db = mongo_client[DATABASE_NAME]
         collection = db['channels']
 
         for channel in tqdm(channels, desc="Storing channels"):
@@ -198,3 +188,45 @@ def extract_message_data(message_obj):
 #     print(f"Unknown: {unknown} products.")
 #     print("Product formatting complete.")
 
+def insert_document(collection_name, document):
+    """Insert a document into a collection."""
+    try:
+        collection = db[collection_name]
+        collection.insert_one(document)
+        return True
+    except Exception as e:
+        print(f"Insert failed: {str(e)}")
+        return False
+
+def update_document(collection_name, query, update_data, upsert=False):
+    """Update a document in a collection."""
+    try:
+        collection = db[collection_name]
+        collection.update_one(query, {"$set": update_data}, upsert=upsert)
+        return True
+    except Exception as e:
+        print(f"Update failed: {str(e)}")
+        return False
+
+def delete_document(collection_name, query):
+    """Delete a document from a collection."""
+    try:
+        collection = db[collection_name]
+        collection.delete_one(query)
+        return True
+    except Exception as e:
+        print(f"Delete failed: {str(e)}")
+        return False
+
+def find_documents(collection_name, query=None, sort_field=None, sort_order=1):
+    """Find documents in a collection."""
+    try:
+        collection = db[collection_name]
+        if query is None:
+            query = {}
+        if sort_field:
+            return list(collection.find(query).sort(sort_field, sort_order))
+        return list(collection.find(query))
+    except Exception as e:
+        print(f"Find failed: {str(e)}")
+        return []
