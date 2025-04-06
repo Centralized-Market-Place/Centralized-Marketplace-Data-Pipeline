@@ -29,7 +29,7 @@ jobs:
           API_HASH: ${{ secrets.API_HASH }}
           SESSION_NAME: ${{ secrets.SESSION_NAME }}
           CLOUD_NAME: ${{ secrets.CLOUD_NAME }}
-          API_KEY: ${{ secrets.CLOUDINARY_API_KEY }}
-          API_SECRET: ${{ secrets.CLOUDINARY_API_SECRET }}
+          API_KEY: ${{ secrets.API_KEY }}
+          API_SECRET: ${{ secrets.API_SECRET }}
         run: |
           python pipeline/pipeline.py
