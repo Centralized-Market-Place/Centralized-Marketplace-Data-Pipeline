@@ -44,7 +44,7 @@ def store_products(products):
             # product['created_at'] = str(datetime.now())
             product['updated_at'] = str(datetime.now())
             # insert or update if message_id matches
-            collection.update_one({'message_id': product['id']}, {'$set': product}, upsert=True)
+            collection.update_one({'message_id': product['message_id']}, {'$set': product}, upsert=True)
         return True
     except Exception as e:
         print(str(e))
