@@ -3,6 +3,7 @@ import json
 import tqdm
 import asyncio
 import cloudinary
+import cloudinary.api
 from tqdm import tqdm
 import cloudinary.uploader
 from datetime import datetime
