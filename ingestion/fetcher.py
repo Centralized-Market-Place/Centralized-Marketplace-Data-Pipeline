@@ -166,7 +166,7 @@ def extract_message_data(message_obj):
         date = message_obj.get('date')
         message = message_obj.get('message', '')
         if not message:
-            return 0, {}
+            return 
 
         forwards = message_obj.get('forwards', 0)
         views = message_obj.get('views', 0)
