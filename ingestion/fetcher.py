@@ -13,22 +13,27 @@ from telethon.tl.custom.message import Message
 from ingestion.constants import CHANNEL_IDS, ALL_CHANNEL_IDS, NEW_CHANNEL_IDS
 from telethon.tl.functions.channels import JoinChannelRequest, GetFullChannelRequest
 from storage.store import store_raw_data, fetch_stored_messages, store_products, store_channels, store_latest_and_oldest_ids
+import os
 
 
-# we should replace these with env variables
-API_ID = "21879721"
-API_HASH = "cadd93c819128f73ba3439a0f430e677"
-SESSION_NAME = 'telegram_client'
+# telegram
+API_ID = os.getenv("API_ID", "")
+API_HASH = os.getenv("API_HASH", "")
+SESSION_NAME = os.getenv("SESSION_NAME", "telegram_client")
+client = TelegramClient(SESSION_NAME, API_ID, API_HASH)
 
-# we should replace these values with env variables
-cloudinary.config( 
-    cloud_name = "dkgm7qlfb", 
-    api_key = "429625611193934", 
-    api_secret = "eqxt9DA9_gbPr-j1Iiz3wYQo7EI",
+
+# cloudinary
+CLOUD_NAME = os.getenv("CLOUD_NAME", "")
+API_KEY = os.getenv("API_KEY", "")
+API_SECRET = os.getenv("API_SECRET", "")
+cloudinary.config(
+    cloud_name=CLOUD_NAME,
+    api_key=API_KEY,
+    api_secret=API_SECRET,
     secure=True
 )
 
-client = TelegramClient(SESSION_NAME, API_ID, API_HASH)
 
 #=========================== messages ============================
 

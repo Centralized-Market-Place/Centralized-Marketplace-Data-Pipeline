@@ -2,15 +2,15 @@ name: Daily Telegram Ingestion
 
 on:
   schedule:
-    - cron: '0 0 * * *'  # Every 24 hours at 00:00 UTC
+    - cron: '0 0 * * *'  # Runs every day at 00:00 UTC
   workflow_dispatch:     # Optional manual trigger
 
 jobs:
-  run-daily-pipeline:
+  run-ingestion:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
+      - name: Checkout repository
         uses: actions/checkout@v3
 
       - name: Set up Python
@@ -24,5 +24,12 @@ jobs:
           pip install -r requirements.txt
 
       - name: Run ingestion pipeline
+        env:
+          API_ID: ${{ secrets.API_ID }}
+          API_HASH: ${{ secrets.API_HASH }}
+          SESSION_NAME: ${{ secrets.SESSION_NAME }}
+          CLOUD_NAME: ${{ secrets.CLOUD_NAME }}
+          API_KEY: ${{ secrets.CLOUDINARY_API_KEY }}
+          API_SECRET: ${{ secrets.CLOUDINARY_API_SECRET }}
         run: |
-          python path/to/your/pipeline.py
+          python pipeline/pipeline.py
