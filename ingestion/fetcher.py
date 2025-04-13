@@ -223,7 +223,7 @@ async def fetch_unread_messages(channel_username, last_fetched_id, tg_client, li
 
 def extract_message_data(message_obj):
     try:
-        message_id = message_obj.get('message_id')
+        message_id = message_obj.get('id')
         
         peer_id = message_obj.get('peer_id', {})
         channel_id = peer_id.get('channel_id') if peer_id.get('_') == 'PeerChannel' else None
