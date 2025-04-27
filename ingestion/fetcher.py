@@ -272,8 +272,8 @@ def extract_message_data(message_obj, channel_mongo_id):
             
         return {
             'message_id': message_id,
-            'channel_id': channel_id,
-            'channel_mongo_id': channel_mongo_id,
+            'telegram_channel_id': channel_id,
+            'channel_id': channel_mongo_id,
             'date': date,
             'description': message,
             'forwards': forwards,
@@ -293,11 +293,13 @@ def extract_message_data(message_obj, channel_mongo_id):
     
 async def fetch_runner():
     await client.start()
-    ALL_CHANNEL_IDS = [(channel["channel"], channel["_id"]) for channel in fetch_all_channels()]
-    for channel_id, channel_mongo_id in tqdm(ALL_CHANNEL_IDS, desc="Channels fetched: "):
+    # todo 
+    ALL_CHANNEL_USERNAMES_AND_MONGO_IDS = [(channel["channel"], channel["channel_info_id"]) for channel in fetch_all_channels()]
+    # see if we have their info in db 
+    for username, channel_id in tqdm(ALL_CHANNEL_USERNAMES_AND_MONGO_IDS, desc="Channels fetched: "):
         # last_fetched_info = fetch_last_fetched_info(channel_id)
         # last_fetched_id = last_fetched_info.get('last_fetched_id')
-        await fetch_unread_messages(channel_id, channel_mongo_id, 0, client)
+        await fetch_unread_messages(username, channel_id, 0, client)
     await client.disconnect()
 
 
@@ -332,7 +334,7 @@ async def download_channel_thumbnail(channel, tg_client):
         print(f"Thumbnail upload failed for {channel.title}: {str(e)}")
         return None
 
-async def fetch_channel_info(channel_username, tg_client):
+async def fetch_channel_info(channel_username, channel_pool_id, tg_client):
     """Fetch channel info with thumbnail URL"""
     try:
         await asyncio.sleep(2)  # Rate limiting
@@ -343,6 +345,7 @@ async def fetch_channel_info(channel_username, tg_client):
             "id": channel.id,
             "title": channel.title,
             "username": channel.username,
+            "pool_entry_id": channel_pool_id,
             "description": getattr(channel, "about", ""),
             "participants": await get_channel_participants_count(channel, tg_client),
             "date_created": channel.date.isoformat(),
@@ -392,6 +395,7 @@ async def fetch_bulk_channel_info(usernames, tg_client):
     """usernames: a list of channel usernames"""
     channel_infos = []
     for channel_username in tqdm(usernames, desc="Fetching infos of channels from Telegram"):
+        assert False # channel_pool_id parameter
         channel_info = await fetch_channel_info(channel_username, tg_client)
         if channel_info:
             channel_infos.append(channel_info)

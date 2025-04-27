@@ -240,3 +240,131 @@ def find_documents(collection_name, query=None, sort_field=None, sort_order=1):
     except Exception as e:
         print(f"Find failed: {str(e)}")
         return []
+
+def solve_channels_slash_pool_inconsistency():
+    channels_collection = db["channels"]
+    channels_pool_collection = db["channels_pool"]
+    
+    # Fetch all pool entries
+    pool_channels = list(channels_pool_collection.find({}))
+    
+    updated_count = 0
+
+    for pool_channel in pool_channels:
+        channel_with_at = pool_channel.get('channel', '')
+        username = channel_with_at.lstrip('@')  # remove '@' symbol
+
+        if not username:
+            continue
+        
+        result = channels_collection.update_one(
+            {"username": username},
+            {"$set": {"pool_entry_id": str(pool_channel["_id"])}}
+        )
+        
+        if result.matched_count:
+            updated_count += 1
+        else:
+            print(f"⚠️ No matching channel found for username: {username}")
+    
+    print(f"✅ Successfully updated {updated_count} channels with pool_entry_id.")
+def solve_product_channel_id_reference_inconsistency():
+    """
+    1. Rename 'channel_id' -> 'telegram_channel_id'
+    2. Attach proper 'channel_id' from MongoDB channels collection
+    3. Remove 'channel_mongo_id' if exists
+    """
+    products_collection = db["products"]
+    channels_collection = db["channels"]
+
+    # Build a lookup map: telegram_channel_id -> mongo _id
+    channel_id_map = {}
+    for channel in channels_collection.find({}):
+        telegram_id = channel["id"]
+        mongo_id = channel["_id"]
+        channel_id_map[telegram_id] = mongo_id
+
+    print(f"ℹ️ Found {len(channel_id_map)} channels to map.")
+
+    # Process all products
+    products = list(products_collection.find({}))
+    updated_count = 0
+
+    for product in tqdm(products, desc="Updating fields: "):
+        update_fields = {}
+        unset_fields = {}
+
+        # 1. Rename channel_id -> telegram_channel_id 
+        if "telegram_channel_id" not in product and "channel_id" in product and isinstance(product["channel_id"], int):
+            update_fields["telegram_channel_id"] = product["channel_id"]
+
+        # 2. Set correct Mongo channel_id
+        telegram_id = product.get("telegram_channel_id") or product.get("channel_id")
+        if isinstance(telegram_id, int):
+            mongo_channel_id = channel_id_map.get(telegram_id)
+            if mongo_channel_id:
+                update_fields["channel_id"] = mongo_channel_id
+            else:
+                print(f"⚠️ No matching channel Mongo ID for Telegram ID {telegram_id} (Product ID {product['_id']})")
+                continue  # Skip update if channel not found
+
+        # 3. Remove channel_mongo_id field if it exists
+        if "channel_mongo_id" in product:
+            unset_fields["channel_mongo_id"] = ""
+
+        # Perform the update if needed
+        if update_fields or unset_fields:
+            update_doc = {}
+            if update_fields:
+                update_doc["$set"] = update_fields
+            if unset_fields:
+                update_doc["$unset"] = unset_fields
+
+            products_collection.update_one(
+                {"_id": product["_id"]},
+                update_doc
+            )
+            updated_count += 1
+
+    print(f"✅ Migration complete. Updated {updated_count} products.")
+
+def update_pool_with_channel_info():
+    """
+    Updates each pool entry with its corresponding channel_infos _id
+    by matching the username.
+    """
+
+    channels_collection = db["channels"]
+    pool_collection = db["channels_pool"]
+
+    # Build a username -> channel_info _id map
+    channel_username_map = {}
+    for channel in channels_collection.find({}):
+        if channel.get("username"):
+            username = channel["username"].lower()
+            channel_username_map[username] = channel["_id"]
+
+    print(f"ℹ️ Found {len(channel_username_map)} channel usernames to map.")
+
+    updated_count = 0
+
+    for pool_entry in pool_collection.find({}):
+        pool_username = pool_entry.get("channel")
+        if not pool_username:
+            continue
+
+        # Remove '@' and lower the username
+        clean_username = pool_username.lstrip("@").lower()
+
+        channel_info_id = channel_username_map.get(clean_username)
+        if channel_info_id:
+            pool_collection.update_one(
+                {"_id": pool_entry["_id"]},
+                {"$set": {"channel_info_id": channel_info_id}}
+            )
+            updated_count += 1
+        else:
+            print(f"⚠️ No matching channel info for pool username {pool_username} (Pool ID {pool_entry['_id']})")
+
+    print(f"✅ Pool update complete. Updated {updated_count} pool entries.")
+update_pool_with_channel_info()
