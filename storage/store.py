@@ -19,6 +19,16 @@ def store_raw_data(raw_data, collection_name='raw_data'):
         print(str(e))
     return False
 
+def fetch_all_channels(collection_name='channels_pool'):
+    try:
+        collection = db[collection_name]
+        channels = list(collection.find())
+        return channels
+    except Exception as e:
+        print(str(e))
+    
+    return []
+
 def fetch_stored_messages(collection_name='raw_data'):
     try:
         collection = db[collection_name]
@@ -38,7 +48,7 @@ def store_products(products):
         collection = db['products']
         for product in tqdm(products, desc="Storing products: "):
             # product['created_at'] = str(datetime.now())
-            product['updated_at'] = str(datetime.now())
+            product['updated_at'] = datetime.now(timezone.utc).isoformat()
             # insert or update if message_id matches
             collection.update_one({'message_id': product['message_id']}, {'$set': product}, upsert=True)
         return True
@@ -49,8 +59,8 @@ def store_products(products):
 def store_product(product):
     try:
         collection = db['products']
-        product['created_at'] = str(datetime.utcnow())
-        product['updated_at'] = str(datetime.utcnow())
+        product['created_at'] = datetime.now(timezone.utc).isoformat()
+        product['updated_at'] = datetime.now(timezone.utc).isoformat()
         # insert or update if message_id matches
         collection.update_one({'message_id': product['message_id']}, {'$set': product}, upsert=True)
         return True

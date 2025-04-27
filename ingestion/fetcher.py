@@ -14,7 +14,7 @@ from cloudinary.utils import cloudinary_url
 from telethon.tl.custom.message import Message
 from ingestion.constants import CHANNEL_IDS, ALL_CHANNEL_IDS, NEW_CHANNEL_IDS
 from telethon.tl.functions.channels import JoinChannelRequest, GetFullChannelRequest
-from storage.store import store_raw_data, fetch_stored_messages, store_products, store_channels, store_latest_and_oldest_ids
+from storage.store import store_raw_data, fetch_stored_messages, store_products, store_channels, store_latest_and_oldest_ids, fetch_all_channels
 from storage.store import insert_document, update_document, delete_document, find_documents
 
 # telegram
@@ -126,36 +126,41 @@ async def download_images(messages, tg_client):
             grouped_messages[message.grouped_id].append(message)
 
         elif message.media and hasattr(message.media, 'photo'):  # Single photo
-            file = await tg_client.download_media(message.media)
-            if file:
-                url = await upload_with_eviction(file)
-                if url:
-                    channel_id = message.peer_id.channel_id if isinstance(message.peer_id, PeerChannel) else None
-                    if channel_id:
-                        images[(channel_id, message.id)].append(url)
-                else:
-                    print(f"Failed to upload image for message ID {message.id}")
-                os.remove(file)
-    
+            try:
+                file = await tg_client.download_media(message.media)
+                if file:
+                    url = await upload_with_eviction(file)
+                    if url:
+                        channel_id = message.peer_id.channel_id if isinstance(message.peer_id, PeerChannel) else None
+                        if channel_id:
+                            images[(channel_id, message.id)].append(url)
+                    else:
+                        print(f"Failed to upload image for message ID {message.id}")
+                    os.remove(file)
+            finally:
+                if file and os.path.exists(file):
+                    os.remove(file)
 
-    
     # Now process grouped messages (albums)
     for grouped_id, msgs in tqdm(grouped_messages.items(), desc="Downloading Albums: "):
         for grouped_msg in msgs:
             if grouped_msg.media and hasattr(grouped_msg.media, 'photo'):
                 await asyncio.sleep(2)  # Rate limit
-                file = await tg_client.download_media(grouped_msg.media)
-                if file:
-                    url = await upload_with_eviction(file)
-                    if url:
-                        # Use channel_id and grouped_msg.id as the key for grouping
-                        channel_id = grouped_msg.peer_id.channel_id if isinstance(grouped_msg.peer_id, PeerChannel) else None
-                        if channel_id:
-                            images[(channel_id, grouped_id)].append(url)
-                    else:
-                        print(f"Failed to upload image for grouped message ID {grouped_msg.id}")
-                    os.remove(file)
-
+                try:
+                    file = await tg_client.download_media(grouped_msg.media)
+                    if file:
+                        url = await upload_with_eviction(file)
+                        if url:
+                            # Use channel_id and grouped_msg.id as the key for grouping
+                            channel_id = grouped_msg.peer_id.channel_id if isinstance(grouped_msg.peer_id, PeerChannel) else None
+                            if channel_id:
+                                images[(channel_id, grouped_id)].append(url)
+                        else:
+                            print(f"Failed to upload image for grouped message ID {grouped_msg.id}")
+                        os.remove(file)
+                finally:
+                    if file and os.path.exists(file):
+                        os.remove(file)
         # print(f"Grouped messages with grouped_id {grouped_id} processed.")
     
     return images
@@ -163,7 +168,7 @@ async def download_images(messages, tg_client):
 
 
 # look into the limit
-async def fetch_unread_messages(channel_username, last_fetched_id, tg_client, limit=5, delay=2, round=1): # 4*30*30 = 3600
+async def fetch_unread_messages(channel_username, channel_mongo_id, last_fetched_id, tg_client, limit=5, delay=2, round=1): # 4*30*30 = 3600
     """Fetch unread messages from the specified Telegram channel"""
 
     messages = []
@@ -206,14 +211,19 @@ async def fetch_unread_messages(channel_username, last_fetched_id, tg_client, li
                 message_id = message_json['id']
                 message_images = images.get((channel_id, message_id), [])
             message_json['images'] = message_images
-
+        
         # Store products in MongoDB
         # stored_products = store_raw_data(messages_json)
         # if not stored_products:
         #     print('Failed to store products!')
 
     # Extract and store simplified message data
-    simplified_messages = [extract_message_data(msg) for msg in messages_json if extract_message_data(msg)]
+    simplified_messages = []
+    for msg in messages_json:
+        extracted = extract_message_data(msg, channel_mongo_id)
+        if extracted:
+            simplified_messages.append(extracted)
+
     stored_simplified = store_products(simplified_messages)
     if not stored_simplified:
         print('Failed to store products data!')
@@ -221,22 +231,25 @@ async def fetch_unread_messages(channel_username, last_fetched_id, tg_client, li
     print(f'Messages fetched and stored from {channel_username}')
     return
 
-def extract_message_data(message_obj):
+def extract_message_data(message_obj, channel_mongo_id):
     try:
         message_id = message_obj.get('id')
         
         peer_id = message_obj.get('peer_id', {})
         channel_id = peer_id.get('channel_id') if peer_id.get('_') == 'PeerChannel' else None
-
+        channel_mongo_id = channel_mongo_id
         date = message_obj.get('date')
         message = message_obj.get('message', '')
         if not message:
-            return 
-
+            return
+        # Check if the message contains at least 50% Latin characters/numbers
+        latin_count = sum(1 for char in message if char.isalnum() and char.isascii())
+        if latin_count / len(message) < 0.5:
+            return
+        
         forwards = message_obj.get('forwards', 0)
         views = message_obj.get('views', 0)
         images = message_obj.get('images', [])
-
         
         reactions_data = []
         try:
@@ -253,19 +266,25 @@ def extract_message_data(message_obj):
                     count = reaction.get('count', 0)
                     if emoji:
                         reactions_data.append((emoji, count))
+
         except Exception as e:
             print(f"Error extracting reactions: {e}")
             
         return {
             'message_id': message_id,
             'channel_id': channel_id,
+            'channel_mongo_id': channel_mongo_id,
             'date': date,
             'description': message,
             'forwards': forwards,
             'views': views,
             'reactions': reactions_data,
             'images': images,
-            'updated_at': message_obj.get('updated_at')
+            'updated_at': message_obj.get('updated_at'),
+            "upvotes": 0,
+            "downvotes": 0,
+            "shares": 0,
+            "comments": 0
         }
         
     except Exception as e:
@@ -274,10 +293,11 @@ def extract_message_data(message_obj):
     
 async def fetch_runner():
     await client.start()
-    for channel_id in tqdm(ALL_CHANNEL_IDS, desc="Channels fetched: "):
+    ALL_CHANNEL_IDS = [(channel["channel"], channel["_id"]) for channel in fetch_all_channels()]
+    for channel_id, channel_mongo_id in tqdm(ALL_CHANNEL_IDS, desc="Channels fetched: "):
         # last_fetched_info = fetch_last_fetched_info(channel_id)
         # last_fetched_id = last_fetched_info.get('last_fetched_id')
-        await fetch_unread_messages(channel_id, 0, client)
+        await fetch_unread_messages(channel_id, channel_mongo_id, 0, client)
     await client.disconnect()
 
 
