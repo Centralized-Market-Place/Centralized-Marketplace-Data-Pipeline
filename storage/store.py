@@ -367,4 +367,4 @@ def update_pool_with_channel_info():
             print(f"⚠️ No matching channel info for pool username {pool_username} (Pool ID {pool_entry['_id']})")
 
     print(f"✅ Pool update complete. Updated {updated_count} pool entries.")
-update_pool_with_channel_info()
+# update_pool_with_channel_info()
