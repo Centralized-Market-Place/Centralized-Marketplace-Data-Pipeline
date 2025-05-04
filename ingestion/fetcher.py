@@ -14,8 +14,8 @@ from cloudinary.utils import cloudinary_url
 from telethon.tl.custom.message import Message
 from ingestion.constants import CHANNEL_IDS, ALL_CHANNEL_IDS, NEW_CHANNEL_IDS
 from telethon.tl.functions.channels import JoinChannelRequest, GetFullChannelRequest
-from storage.store import store_raw_data, fetch_stored_messages, store_products, store_channels, store_latest_and_oldest_ids, fetch_all_channels
 from storage.store import insert_document, update_document, delete_document, find_documents
+from storage.store import store_raw_data, fetch_stored_messages, store_products, store_channels, store_latest_and_oldest_ids, fetch_all_channels
 
 # telegram
 API_ID = os.getenv("API_ID", "")
@@ -307,10 +307,10 @@ async def fetch_runner():
 async def join_channel(channel, tg_client):
     await tg_client(JoinChannelRequest(channel))
 
-async def get_channel_participants_count(channel, tg_client):
+async def get_channel_about_and_participants_count(channel, tg_client):
     await asyncio.sleep(2)
     full_channel  = await tg_client(GetFullChannelRequest(channel))
-    return full_channel.full_chat.participants_count
+    return full_channel.full_chat.about, full_channel.full_chat.participants_count
 
 async def download_channel_thumbnail(channel, tg_client):
     """Download and upload channel thumbnail to Cloudinary"""
@@ -340,14 +340,14 @@ async def fetch_channel_info(channel_username, channel_pool_id, tg_client):
         await asyncio.sleep(2)  # Rate limiting
         channel = await tg_client.get_entity(channel_username)
         
-        # Get base channel info
+        about, participants_count = await get_channel_about_and_participants_count(channel, tg_client)
         channel_info = {
             "telegram_id": channel.id,
             "title": channel.title,
             "username": channel.username,
             "pool_entry_id": channel_pool_id,
-            "description": getattr(channel, "about", ""),
-            "participants": await get_channel_participants_count(channel, tg_client),
+            "description": about,
+            "participants": participants_count,
             "date_created": channel.date.isoformat(),
             "verified": channel.verified,
             "thumbnail_url": None,  # Initialize as None
@@ -366,31 +366,7 @@ async def fetch_channel_info(channel_username, channel_pool_id, tg_client):
         print(f"Error fetching channel info: {str(e)}")
         return None
 
-# async def fetch_channel_info(channel_username, tg_client):
-#     try:
-#         await asyncio.sleep(2)
-#         channel = await tg_client.get_entity(channel_username)
-#         participants_count = await get_channel_participants_count(channel, tg_client)
-#         channel_info = {
-#                 "id": channel.id,
-#                 "title": channel.title,
-#                 "username": channel.username,
-#                 "description": getattr(channel, "about", ""),  # Channel description
-#                 "participants": participants_count,  # Number of members
-#                 "date_created": channel.date.isoformat(),  # Channel creation date
-#                 "broadcast": channel.broadcast,  # Is it a broadcast channel?
-#                 "verified": channel.verified,  # Verified status
-#                 "restricted": channel.restricted,  # Is the channel restricted?
-#                 "scam": channel.scam,  # Is it marked as a scam?
-#                 "has_link": channel.has_link,  # Does it have an invite link?
-#                 "has_geo": channel.has_geo,  # Does it have a location?
-#                 "photo_id": channel.photo.photo_id if channel.photo else None,  # Profile photo ID
-#             }
-#         return channel_info
-#     except Exception as e:
-#         print(f"Error getting channel info {channel_username}")
         
-
 async def fetch_bulk_channel_info(usernames, tg_client):
     """usernames: a list of channel usernames"""
     channel_infos = []
