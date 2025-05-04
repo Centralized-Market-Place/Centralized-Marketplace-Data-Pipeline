@@ -307,7 +307,7 @@ def solve_product_channel_id_reference_inconsistency():
             else:
                 print(f"⚠️ No matching channel Mongo ID for Telegram ID {telegram_id} (Product ID {product['_id']})")
                 continue  # Skip update if channel not found
-
+        
         # 3. Remove channel_mongo_id field if it exists
         if "channel_mongo_id" in product:
             unset_fields["channel_mongo_id"] = ""
@@ -347,15 +347,13 @@ def update_pool_with_channel_info():
     print(f"ℹ️ Found {len(channel_username_map)} channel usernames to map.")
 
     updated_count = 0
-
     for pool_entry in pool_collection.find({}):
         pool_username = pool_entry.get("channel")
         if not pool_username:
             continue
-
+        
         # Remove '@' and lower the username
         clean_username = pool_username.lstrip("@").lower()
-
         channel_info_id = channel_username_map.get(clean_username)
         if channel_info_id:
             pool_collection.update_one(
@@ -367,4 +365,17 @@ def update_pool_with_channel_info():
             print(f"⚠️ No matching channel info for pool username {pool_username} (Pool ID {pool_entry['_id']})")
 
     print(f"✅ Pool update complete. Updated {updated_count} pool entries.")
-# update_pool_with_channel_info()
+
+def rename_channel_id_field():
+    old_field = 'id'
+    new_field = 'telegram_id'
+    collection = db["channels"]
+
+    result = collection.update_many(
+        {old_field: {"$exists": True}},
+        {"$rename": {old_field: new_field}}
+    )
+
+    print(f"Renamed field '{old_field}' to '{new_field}' in {result.modified_count} documents.")
+    return result.modified_count
+

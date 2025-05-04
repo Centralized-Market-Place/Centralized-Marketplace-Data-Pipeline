@@ -342,7 +342,7 @@ async def fetch_channel_info(channel_username, channel_pool_id, tg_client):
         
         # Get base channel info
         channel_info = {
-            "id": channel.id,
+            "telegram_id": channel.id,
             "title": channel.title,
             "username": channel.username,
             "pool_entry_id": channel_pool_id,
