@@ -7,3 +7,4 @@ python-telegram-bot
 pymongo
 tqdm
 cloudinary
+langgraph

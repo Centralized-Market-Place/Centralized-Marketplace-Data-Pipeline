@@ -17,6 +17,8 @@ from telethon.tl.functions.channels import JoinChannelRequest, GetFullChannelReq
 from storage.store import insert_document, update_document, delete_document, find_documents
 from storage.store import store_raw_data, fetch_stored_messages, store_products, store_channels, store_latest_and_oldest_ids, fetch_all_channels
 
+from processing.extractor import process_description
+
 # telegram
 API_ID = os.getenv("API_ID", "")
 API_HASH = os.getenv("API_HASH", "")
@@ -270,6 +272,9 @@ def extract_message_data(message_obj, channel_mongo_id):
         except Exception as e:
             print(f"Error extracting reactions: {e}")
             
+        result = process_description(message)
+        extracted = result.get("extracted") if isinstance(result, dict) else None
+
         return {
             'message_id': message_id,
             'telegram_channel_id': channel_id,
@@ -284,7 +289,8 @@ def extract_message_data(message_obj, channel_mongo_id):
             "upvotes": 0,
             "downvotes": 0,
             "shares": 0,
-            "comments": 0
+            "comments": 0,
+            **({k: extracted.get(k) for k in ['title', 'price', 'category', 'location', 'phone', 'link']} if extracted else {})
         }
         
     except Exception as e:
