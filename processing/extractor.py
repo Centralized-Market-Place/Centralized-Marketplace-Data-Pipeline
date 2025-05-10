@@ -96,7 +96,8 @@ def decide_node(state: GraphState) -> dict:
 
 def extract_node(state: GraphState):
     print("Entering extract_node.")
-    return extract_entities(state["post"])
+    extraction = extract_entities(state["post"])
+    return {"result": extraction}
 
 def skip_node(state: GraphState):
     print("Entering skip_node.")
@@ -123,6 +124,11 @@ def process_description(input_text: str):
     print(f"\n--- Processing Input ---")
     result = app.invoke({"post": input_text.strip()})
     # print(f"✅ Final Result: {result}")
+    print('=================')
+    if result.get("decision") == "extract":
+        print(f"Extracted Data: {result.get('result')}")
+        return result.get("result")  # Return the extracted data if decision is "extract"
+    return None
     return result
 
 # Example usage
