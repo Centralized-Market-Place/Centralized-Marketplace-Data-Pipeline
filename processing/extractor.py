@@ -13,6 +13,9 @@ API_KEY3 = "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"     # GELO
 MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
 API_URL = "https://api.groq.com/openai/v1/chat/completions"
 
+# === Input Length Limit ===
+MAX_CHAR_LENGTH = 2000  # Roughly ~500 tokens, safe for 3 requests
+
 # === LangGraph State ===
 class GraphState(TypedDict, total=False):
     post: str
@@ -76,10 +79,19 @@ Post:
 def extract_categories(description: str):
     try:
         prompt = f"""
-From the following product description, extract a hierarchical list of categories it belongs to.
-Respond only with a JSON list of strings, from general to specific.
+From the following product description, extract a detailed and hierarchical list of categories it belongs to.
+Start from a general category and go into more specific subcategories, at least 3 levels deep if possible.
 
-Example: ["technology", "computer", "laptop"]
+Valid top-level categories: ["technology", "clothes", "shoes", "accessories"]
+
+Return a JSON array of strings ordered from general to specific.
+Example outputs:
+- ["technology", "phones", "smartphones", "android"]
+- ["clothes", "women", "dresses", "evening dresses"]
+- ["shoes", "men", "formal", "oxford"]
+- ["accessories", "bags", "backpacks", "laptop bags"]
+
+Only return a valid JSON list. No extra text.
 
 Description:
 \"\"\"{description}\"\"\""""
@@ -143,11 +155,16 @@ graph.add_edge("skip", END)
 graph.set_entry_point("decide")
 app = graph.compile()
 
+# === Truncate Input ===
+def truncate_input(text: str) -> str:
+    return text[:MAX_CHAR_LENGTH]
+
 # === Run Single Description ===
 def process_description(input_text: str):
     if not input_text.strip():
         print("❌ Error: Empty description")
         return 
+    input_text = truncate_input(input_text)
     print(f"\n--- Processing Input ---")
     result = app.invoke({"post": input_text.strip()})
     print('=================')
@@ -159,6 +176,6 @@ def process_description(input_text: str):
     return None
 
 # === Example Usage ===
-# if __name__ == "__main__":
-#     user_input = input("Enter a product description:\n")
-#     process_description(user_input)
+if __name__ == "__main__":
+    user_input = input("Enter a product description:\n")
+    process_description(user_input)
