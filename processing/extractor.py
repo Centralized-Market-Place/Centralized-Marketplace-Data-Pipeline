@@ -76,10 +76,19 @@ Post:
 def extract_categories(description: str):
     try:
         prompt = f"""
-From the following product description, extract a hierarchical list of categories it belongs to.
-Respond only with a JSON list of strings, from general to specific.
+From the following product description, extract a detailed and hierarchical list of categories it belongs to.
+Start from a general category and go into more specific subcategories, at least 3 levels deep if possible.
 
-Example: ["technology", "computer", "laptop"]
+Valid top-level categories: ["technology", "clothes", "shoes", "accessories"]
+
+Return a JSON array of strings ordered from general to specific.
+Example outputs:
+- ["technology", "phones", "smartphones", "android"]
+- ["clothes", "women", "dresses", "evening dresses"]
+- ["shoes", "men", "formal", "oxford"]
+- ["accessories", "bags", "backpacks", "laptop bags"]
+
+Only return a valid JSON list. No extra text.
 
 Description:
 \"\"\"{description}\"\"\""""
@@ -101,6 +110,7 @@ Description:
     except Exception as e:
         print(f"❌ Category extraction error: {e}")
         return []
+
 
 # === Graph Nodes ===
 def decide_node(state: GraphState) -> dict:
@@ -159,6 +169,6 @@ def process_description(input_text: str):
     return None
 
 # === Example Usage ===
-# if __name__ == "__main__":
-#     user_input = input("Enter a product description:\n")
-#     process_description(user_input)
+if __name__ == "__main__":
+    user_input = input("Enter a product description:\n")
+    process_description(user_input)
