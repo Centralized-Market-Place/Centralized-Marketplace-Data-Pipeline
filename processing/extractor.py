@@ -13,6 +13,9 @@ API_KEY3 = "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"     # GELO
 MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
 API_URL = "https://api.groq.com/openai/v1/chat/completions"
 
+# === Input Length Limit ===
+MAX_CHAR_LENGTH = 2000  # Roughly ~500 tokens, safe for 3 requests
+
 # === LangGraph State ===
 class GraphState(TypedDict, total=False):
     post: str
@@ -111,7 +114,6 @@ Description:
         print(f"❌ Category extraction error: {e}")
         return []
 
-
 # === Graph Nodes ===
 def decide_node(state: GraphState) -> dict:
     is_product = is_product_tool(state["post"])
@@ -153,11 +155,16 @@ graph.add_edge("skip", END)
 graph.set_entry_point("decide")
 app = graph.compile()
 
+# === Truncate Input ===
+def truncate_input(text: str) -> str:
+    return text[:MAX_CHAR_LENGTH]
+
 # === Run Single Description ===
 def process_description(input_text: str):
     if not input_text.strip():
         print("❌ Error: Empty description")
         return 
+    input_text = truncate_input(input_text)
     print(f"\n--- Processing Input ---")
     result = app.invoke({"post": input_text.strip()})
     print('=================')
