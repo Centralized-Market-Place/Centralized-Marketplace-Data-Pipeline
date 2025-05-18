@@ -45,7 +45,7 @@ def store_decoded(data):
 
 def store_products(products):
     try:
-        collection = db['structured_products']
+        collection = db['structured_products_test']
         for product in tqdm(products, desc="Storing products: "):
             # product['created_at'] = str(datetime.now())
             product['updated_at'] = datetime.now(timezone.utc)
