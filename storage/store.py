@@ -44,13 +44,34 @@ def store_decoded(data):
 
 
 def store_products(products):
+    """
+    Insert products into 'structured_products_test' collection.
+    If a product with the same message_id exists, update all fields
+    except for upvotes, downvotes, shares, clicks, and comments.
+    """
     try:
         collection = db['structured_products_test']
+        skip_fields = ['upvotes', 'downvotes', 'shares', 'clicks', 'comments']
         for product in tqdm(products, desc="Storing products: "):
-            # product['created_at'] = str(datetime.now())
-            product['updated_at'] = datetime.now(timezone.utc)
-            # insert or update if message_id matches
-            collection.update_one({'message_id': product['message_id']}, {'$set': product}, upsert=True)
+            existing = collection.find_one({
+                'message_id': product['message_id'],
+                'telegram_channel_id': product.get('telegram_channel_id')
+            })
+            if existing:
+                # Preserve the skip_fields from the existing document
+                for field in skip_fields:
+                    if field in existing:
+                        product[field] = existing[field]
+                product['test'] = "tested"
+                product['updated_at'] = datetime.now(timezone.utc)
+                collection.update_one(
+                    {'message_id': product['message_id']},
+                    {'$set': {k: v for k, v in product.items() if k not in skip_fields}}
+                )
+            else:
+                product['created_at'] = datetime.now(timezone.utc)
+                product['updated_at'] = datetime.now(timezone.utc)
+                collection.insert_one(product)
         return True
     except Exception as e:
         print(str(e))
