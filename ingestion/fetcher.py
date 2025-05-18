@@ -5,19 +5,19 @@ import asyncio
 import cloudinary
 import cloudinary.api
 from tqdm import tqdm
+from bson import ObjectId 
 import cloudinary.uploader
-from datetime import datetime
 from collections import defaultdict
 from telethon import TelegramClient
+from datetime import datetime, timezone
 from telethon.tl.types import PeerChannel
 from cloudinary.utils import cloudinary_url
 from telethon.tl.custom.message import Message
-from ingestion.constants import CHANNEL_IDS, ALL_CHANNEL_IDS, NEW_CHANNEL_IDS
 from telethon.tl.functions.channels import JoinChannelRequest, GetFullChannelRequest
 from storage.store import insert_document, update_document, delete_document, find_documents
 from storage.store import store_raw_data, fetch_stored_messages, store_products, store_channels, store_latest_and_oldest_ids, fetch_all_channels
-
-from processing.extractor import process_description
+from processing.extractor import extract
+# from processing.extractor import process_description
 
 # telegram
 API_ID = os.getenv("API_ID", "")
@@ -36,8 +36,8 @@ cloudinary.config(
     api_secret=API_SECRET,
     secure=True
 )
-# Storage limit in bytes (Free tier = 1GB)
-CLOUDINARY_STORAGE_LIMIT = 751106637 # 1073741824 without existing images
+# Storage limit in bytes (Free tier = 24GB)
+CLOUDINARY_STORAGE_LIMIT = 23_000_000_000 # 240 # 1073741824 without existing images # 250000
 
 #=========================== messages ============================
 
@@ -191,14 +191,15 @@ async def fetch_unread_messages(channel_username, channel_mongo_id, last_fetched
     messages_json = [json.loads(message.to_json()) for message in tqdm(messages, desc="Decoding Messages to JSON: ")]
     stored = store_raw_data(messages_json, collection_name="raw_data")
     if not stored:
-        print('Storage failed !!!!!')
-    
+        print('Raw data storage failed !!!!!')
+    else:
+        print("Raw data stored.")
     # store last fetched info
-    last_fetched_info = {
-        "channel_id": channel_username,
-        "last_fetched_id": new_last_fetched_id
-        }
-    store_raw_data([last_fetched_info], collection_name="last_fetched_info")
+    # last_fetched_info = {
+    #     "channel_id": channel_username,
+    #     "last_fetched_id": new_last_fetched_id
+    #     }
+    # store_raw_data([last_fetched_info], collection_name="last_fetched_info")
     
 
     images = await download_images(messages, tg_client)
@@ -272,25 +273,33 @@ def extract_message_data(message_obj, channel_mongo_id):
         except Exception as e:
             print(f"Error extracting reactions: {e}")
             
-        result = process_description(message)
-        extracted = result.get("extracted") if isinstance(result, dict) else None
+        # result = process_description(message)
+        extracted, doc_embedding = extract(message)
 
         return {
             'message_id': message_id,
             'telegram_channel_id': channel_id,
-            'channel_id': channel_mongo_id,
+            'channel_id': ObjectId(channel_mongo_id) if not isinstance(channel_mongo_id, ObjectId) else channel_mongo_id,
             'date': date,
             'description': message,
             'forwards': forwards,
             'views': views,
             'reactions': reactions_data,
             'images': images,
-            'updated_at': message_obj.get('updated_at'),
-            "upvotes": 0,
-            "downvotes": 0,
-            "shares": 0,
-            "comments": 0,
-            **({k: extracted.get(k) for k in ['title', 'price', 'category', 'location', 'phone', 'link']} if extracted else {})
+            'created_at': datetime.now(timezone.utc),
+            'updated_at': datetime.now(timezone.utc),
+            'upvotes': 0,
+            'downvotes': 0,
+            'shares': 0,
+            'clicks': 0,
+            'comments': 0,
+            'embedding': doc_embedding, 
+            'title': extracted.get('title'),
+            'price': extracted.get('price'),
+            'location': extracted.get('location'),
+            'phone': extracted.get('phone'),
+            'link': extracted.get('link'),
+            'categories': extracted.get('categories', [])
         }
         
     except Exception as e:

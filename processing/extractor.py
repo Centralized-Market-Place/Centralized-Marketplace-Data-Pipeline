@@ -1,20 +1,44 @@
 import json
 import time
-import requests
 import re
 from langgraph.graph import StateGraph, END
 from typing import TypedDict
+import threading
+from together import Together
+import os
+from processing.price_cleaner import clean_price
+from processing.category_validator import validate_and_clean_categories
+from processing.sentence_transformer import transform
 
 # === API Constants ===
-API_KEY = "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"      # Gelo
-API_KEY2 = "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"     # Million
-API_KEY3 = "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"     # GELO_2
+# API_KEY = "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"      # Gelo
+# API_KEY2 = "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"     # Million
+# API_KEY3 = "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"     # GELO_2
 
-MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
-API_URL = "https://api.groq.com/openai/v1/chat/completions"
+# MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
+# API_URL = "https://api.groq.com/openai/v1/chat/completions"
 
-# === Input Length Limit ===
+API_KEY = os.environ.get("TOGETHER_API_KEY") or "tgp_v1_yyuUrsmwMhGZ4vfWmJ1v5IV8BnQH0kODZ81I8DmU22A"  # Million
+MODEL = "deepseek-ai/DeepSeek-V3"
 MAX_CHAR_LENGTH = 2000  # Roughly ~500 tokens, safe for 3 requests
+
+
+
+together_client = Together(api_key=API_KEY)
+
+# Simple rate limiter: allow 1 request per second
+rate_limit_lock = threading.Lock()
+last_request_time = [0]
+RATE_LIMIT_SECONDS = 1.0
+
+def together_chat(messages):
+    with rate_limit_lock:
+        now = time.time()
+        wait = last_request_time[0] + RATE_LIMIT_SECONDS - now
+        if wait > 0:
+            time.sleep(wait)
+        last_request_time[0] = time.time()
+    return together_client.chat.completions.create(model=MODEL, messages=messages)
 
 # === LangGraph State ===
 class GraphState(TypedDict, total=False):
@@ -25,15 +49,12 @@ class GraphState(TypedDict, total=False):
 # === Step 1: Product Check ===
 def is_product_tool(input_text: str) -> bool:
     try:
-        prompt = f"Does the following text describe a product being sold? Answer 'yes' or 'no'.\n\nPost:\n{input_text}"
-        response = requests.post(
-            API_URL,
-            headers={"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"},
-            json={"model": MODEL, "messages": [{"role": "user", "content": prompt}]}
-        )
-        response.raise_for_status()
-        content = response.json()["choices"][0]["message"]["content"].lower()
-        is_product = "yes" in content
+        prompt = f"No explanation. Does the following text describe a product being sold? Answer 'yes' or 'no'.\n\nPost:\n{input_text}"
+        response = together_chat([
+            {"role": "user", "content": prompt}
+        ])
+        content = response.choices[0].message.content.lower()
+        is_product = ("yes" in content) and ("no" not in content)
         print(f"LLM Product Decision: '{content}', Is Product: {is_product}")
         return is_product
     except Exception as e:
@@ -47,7 +68,6 @@ def extract_entities(description: str):
 Extract structured information from the following post. Return a JSON object with:
 - title
 - price
-- category: one of ["technology", "clothes", "shoes", "accessories"]
 - location
 - phone
 - link
@@ -56,18 +76,20 @@ Respond with valid JSON only. No explanation.
 
 Post:
 \"\"\"{description}\"\"\""""
-        response = requests.post(
-            API_URL,
-            headers={"Authorization": f"Bearer {API_KEY2}", "Content-Type": "application/json"},
-            json={"model": MODEL, "messages": [{"role": "user", "content": prompt}]}
-        )
-        response.raise_for_status()
-        raw = response.json()["choices"][0]["message"]["content"]
-        match = re.search(r"\{.*\}", raw, re.DOTALL)
+        response = together_chat([
+            {"role": "user", "content": prompt}
+        ])
+        raw = response.choices[0].message.content
+        # Use non-greedy regex to extract the first JSON object
+        match = re.search(r"\{.*?\}", raw, re.DOTALL)
         if match:
-            extracted_data = json.loads(match.group(0))
-            print(f"✅ Extracted")
-            return {"extracted": extracted_data}
+            try:
+                extracted_data = json.loads(match.group(0))
+                print(f"✅ Extracted")
+                return {"extracted": extracted_data}
+            except Exception as e:
+                print(f"❌ Extraction error (json.loads): {e}")
+                return {"error": f"Extraction error: {str(e)}", "raw_response": match.group(0)}
         else:
             print("⚠️ No JSON object found.")
             return {"error": "No JSON found in response", "raw_response": raw}
@@ -79,33 +101,34 @@ Post:
 def extract_categories(description: str):
     try:
         prompt = f"""
-From the following product description, extract a detailed and hierarchical list of categories it belongs to.
-Start from a general category and go into more specific subcategories, at least 3 levels deep if possible.
+Extract a detailed, hierarchical category list from the product description.
 
-Valid top-level categories: ["technology", "clothes", "shoes", "accessories"]
+Use only from the following fixed categories:
+Top-level: ["technology", "clothes", "shoes", "accessories"]
+Subcategories:
+- technology: ["phones", "smartphones", "android", "iphone", "laptops", "gaming", "tablets", "wearables"]
+- clothes: ["men", "women", "dresses", "shirts", "t-shirts", "jeans", "evening dresses"]
+- shoes: ["men", "women", "formal", "casual", "oxford", "sneakers", "boots"]
+- accessories: ["bags", "backpacks", "laptop bags", "jewelry", "watches", "belts"]
 
-Return a JSON array of strings ordered from general to specific.
-Example outputs:
+Return a JSON list (from general to specific), 3+ levels if possible.
+Do not invent new terms.
+No explanations. JSON only.
+
+Examples:
 - ["technology", "phones", "smartphones", "android"]
 - ["clothes", "women", "dresses", "evening dresses"]
-- ["shoes", "men", "formal", "oxford"]
-- ["accessories", "bags", "backpacks", "laptop bags"]
-
-Only return a valid JSON list. No extra text.
 
 Description:
-\"\"\"{description}\"\"\""""
-        response = requests.post(
-            API_URL,
-            headers={"Authorization": f"Bearer {API_KEY3}", "Content-Type": "application/json"},
-            json={"model": MODEL, "messages": [{"role": "user", "content": prompt}]}
-        )
-        response.raise_for_status()
-        raw = response.json()["choices"][0]["message"]["content"]
+\"\"\"{description}\"\"\"
+"""
+        response = together_chat([
+            {"role": "user", "content": prompt}
+        ])
+        raw = response.choices[0].message.content
         match = re.search(r"\[.*\]", raw, re.DOTALL)
         if match:
             category_list = json.loads(match.group(0))
-            print(f"📂 Categories: {category_list}")
             return category_list
         else:
             print("⚠️ No valid JSON list found for categories.")
@@ -118,16 +141,13 @@ Description:
 def decide_node(state: GraphState) -> dict:
     is_product = is_product_tool(state["post"])
     decision = "extract" if is_product else "skip"
-    print(f"Decision Node Output: {decision}")
     return {"decision": decision}
 
 def extract_node(state: GraphState):
-    print("Entering extract_node.")
     extraction = extract_entities(state["post"])
     return {"result": extraction}
 
 def categorize_node(state: GraphState):
-    print("Entering categorize_node.")
     description = state["post"]
     categories = extract_categories(description)
     result = state["result"]
@@ -136,7 +156,6 @@ def categorize_node(state: GraphState):
     return {"result": result}
 
 def skip_node(state: GraphState):
-    print("Entering skip_node.")
     skipped_data = {"skipped": True, "original": state["post"]}
     return skipped_data
 
@@ -162,20 +181,40 @@ def truncate_input(text: str) -> str:
 # === Run Single Description ===
 def process_description(input_text: str):
     if not input_text.strip():
-        print("❌ Error: Empty description")
         return 
+    
     input_text = truncate_input(input_text)
-    print(f"\n--- Processing Input ---")
     result = app.invoke({"post": input_text.strip()})
-    print('=================')
     if result.get("decision") == "extract":
-        print(f"Extracted Data:\n{json.dumps(result.get('result'), indent=2)}")
         return result.get("result")
     else:
         print("Post was skipped (not a product).")
+    
     return None
 
-# === Example Usage ===
-if __name__ == "__main__":
-    user_input = input("Enter a product description:\n")
-    process_description(user_input)
+def extract(text: str):
+    try:
+        result = process_description(text)    
+        extracted = result.get("extracted") if isinstance(result, dict) else None
+
+        # Skip the message if no title is extracted
+        if not extracted or not extracted.get("title"):
+            return None, None
+
+        try:
+            extracted['price'] = clean_price(extracted.get('price'))
+            extracted['categories'] = validate_and_clean_categories(extracted.get('categories', []))
+
+        except Exception as e:
+            print("❌ Error trying to clean price and categories!")
+
+        doc_embedding = transform(text)
+        return extracted, doc_embedding
+    except Exception as e:
+        print(f"Error processing message: {e}")
+        return None, None
+
+# # === Example Usage ===
+# if __name__ == "__main__":
+#     user_input = input("Enter a product description:\n")
+#     process_description(user_input)
