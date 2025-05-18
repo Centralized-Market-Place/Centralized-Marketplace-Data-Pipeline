@@ -50,7 +50,7 @@ def store_products(products):
     except for upvotes, downvotes, shares, clicks, and comments.
     """
     try:
-        collection = db['structured_products_test']
+        collection = db['structured_products']
         skip_fields = ['upvotes', 'downvotes', 'shares', 'clicks', 'comments']
         for product in tqdm(products, desc="Storing products: "):
             existing = collection.find_one({
@@ -62,10 +62,13 @@ def store_products(products):
                 for field in skip_fields:
                     if field in existing:
                         product[field] = existing[field]
-                product['test'] = "tested"
+
                 product['updated_at'] = datetime.now(timezone.utc)
                 collection.update_one(
-                    {'message_id': product['message_id']},
+                    {
+                        'message_id': product['message_id'],
+                        'telegram_channel_id': product.get('telegram_channel_id')
+                    },
                     {'$set': {k: v for k, v in product.items() if k not in skip_fields}}
                 )
             else:
