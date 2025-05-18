@@ -275,6 +275,7 @@ def extract_message_data(message_obj, channel_mongo_id):
             
         # result = process_description(message)
         extracted, doc_embedding = extract(message)
+        if not extracted: return None
 
         return {
             'message_id': message_id,
