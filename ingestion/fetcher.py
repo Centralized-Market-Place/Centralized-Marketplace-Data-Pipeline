@@ -394,6 +394,7 @@ async def fetch_bulk_channel_info(usernames, tg_client):
     return channel_infos
 
 async def fetch_all_channels_runner():
+    return
     await client.start()
     channel_infos = await fetch_bulk_channel_info(ALL_CHANNEL_IDS, client)
     stored = store_channels(channel_infos)

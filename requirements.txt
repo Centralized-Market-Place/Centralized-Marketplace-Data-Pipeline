@@ -9,3 +9,4 @@ tqdm
 cloudinary
 langgraph
 sentence_transformers
+groq

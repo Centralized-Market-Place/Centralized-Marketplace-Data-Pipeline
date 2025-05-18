@@ -4,41 +4,52 @@ import re
 from langgraph.graph import StateGraph, END
 from typing import TypedDict
 import threading
-from together import Together
 import os
 from processing.price_cleaner import clean_price
 from processing.category_validator import validate_and_clean_categories
 from processing.sentence_transformer import transform
+from groq import Groq
 
 # === API Constants ===
 # API_KEY = "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"      # Gelo
-# API_KEY2 = "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"     # Million
-# API_KEY3 = "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"     # GELO_2
-
-# MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
-# API_URL = "https://api.groq.com/openai/v1/chat/completions"
-
-API_KEY = os.environ.get("TOGETHER_API_KEY") or "tgp_v1_yyuUrsmwMhGZ4vfWmJ1v5IV8BnQH0kODZ81I8DmU22A"  # Million
-MODEL = "deepseek-ai/DeepSeek-V3"
-MAX_CHAR_LENGTH = 2000  # Roughly ~500 tokens, safe for 3 requests
 
 
+# Initialize Groq client
+groq_client = Groq(
+    api_key=os.environ.get("GROQ_API_KEY") or "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",
+)
 
-together_client = Together(api_key=API_KEY)
+AI_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct" 
+MAX_CHAR_LENGTH = 2000
 
 # Simple rate limiter: allow 1 request per second
 rate_limit_lock = threading.Lock()
 last_request_time = [0]
-RATE_LIMIT_SECONDS = 1.0
+RATE_LIMIT_SECONDS = 2.0
 
-def together_chat(messages):
+def ask_ai(prompt):
+    messages = [{"role": "user", "content": prompt}] 
     with rate_limit_lock:
         now = time.time()
         wait = last_request_time[0] + RATE_LIMIT_SECONDS - now
         if wait > 0:
             time.sleep(wait)
         last_request_time[0] = time.time()
-    return together_client.chat.completions.create(model=MODEL, messages=messages)
+
+    response = groq_client.chat.completions.create(
+        model=AI_MODEL,
+        messages=messages,
+    )
+    return response.choices[0].message.content
+
+# def together_chat(messages):
+#     with rate_limit_lock:
+#         now = time.time()
+#         wait = last_request_time[0] + RATE_LIMIT_SECONDS - now
+#         if wait > 0:
+#             time.sleep(wait)
+#         last_request_time[0] = time.time()
+#     return together_client.chat.completions.create(model=MODEL, messages=messages)
 
 # === LangGraph State ===
 class GraphState(TypedDict, total=False):
@@ -50,10 +61,8 @@ class GraphState(TypedDict, total=False):
 def is_product_tool(input_text: str) -> bool:
     try:
         prompt = f"No explanation. Does the following text describe a product being sold? Answer 'yes' or 'no'.\n\nPost:\n{input_text}"
-        response = together_chat([
-            {"role": "user", "content": prompt}
-        ])
-        content = response.choices[0].message.content.lower()
+        response = ask_ai(prompt)
+        content = response.lower()
         is_product = ("yes" in content) and ("no" not in content)
         print(f"LLM Product Decision: '{content}', Is Product: {is_product}")
         return is_product
@@ -76,10 +85,8 @@ Respond with valid JSON only. No explanation.
 
 Post:
 \"\"\"{description}\"\"\""""
-        response = together_chat([
-            {"role": "user", "content": prompt}
-        ])
-        raw = response.choices[0].message.content
+        response = ask_ai(prompt)
+        raw = response
         # Use non-greedy regex to extract the first JSON object
         match = re.search(r"\{.*?\}", raw, re.DOTALL)
         if match:
@@ -122,10 +129,8 @@ Examples:
 Description:
 \"\"\"{description}\"\"\"
 """
-        response = together_chat([
-            {"role": "user", "content": prompt}
-        ])
-        raw = response.choices[0].message.content
+        response = ask_ai(prompt)
+        raw = response
         match = re.search(r"\[.*\]", raw, re.DOTALL)
         if match:
             category_list = json.loads(match.group(0))
