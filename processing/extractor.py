@@ -6,9 +6,10 @@ from typing import TypedDict
 import threading
 import os
 from processing.price_cleaner import clean_price
-from processing.category_validator import validate_and_clean_categories
+from processing.category_validator import validate_and_clean_categories, ensure_list, ensure_string
 from processing.sentence_transformer import transform
 from groq import Groq
+
 
 # === API Constants ===
 # API_KEY = "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"      # Gelo
@@ -208,11 +209,13 @@ def extract(text: str):
 
         try:
             extracted['price'] = clean_price(extracted.get('price'))
-            extracted['categories'] = validate_and_clean_categories(extracted.get('categories', []))
-
         except Exception as e:
-            print("❌ Error trying to clean price and categories!")
+            print("❌ Error trying to clean price")
 
+        extracted['categories'] = validate_and_clean_categories(extracted.get('categories', []))
+        extracted['location'] = ensure_string(extracted.get('location', ''))
+        extracted['phone'] = ensure_list(extracted.get('phone', []))
+        extracted['link'] = ensure_list(extracted.get('link', []))
         doc_embedding = transform(text)
         return extracted, doc_embedding
     except Exception as e:
