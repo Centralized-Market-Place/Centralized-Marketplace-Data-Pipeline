@@ -1,11 +1,11 @@
 # from ..ingestion.constants import VALID_CATEGORIES
 
 VALID_CATEGORIES = {
-        "technology": {"phones", "smartphones", "android", "iphone", "laptops", "gaming", "tablets", "wearables"},
-        "clothes": {"men", "women", "dresses", "shirts", "t-shirts", "jeans", "evening dresses"},
-        "shoes": {"men", "women", "formal", "casual", "oxford", "sneakers", "boots"},
-        "accessories": {"bags", "backpacks", "laptop bags", "jewelry", "watches", "belts"},
-    }
+    "technology": {"phones", "smartphones", "android", "iphone", "laptops", "gaming", "tablets", "wearables"},
+    "clothes": {"men", "women", "dresses", "shirts", "t-shirts", "jeans", "evening dresses"},
+    "shoes": {"men", "women", "formal", "casual", "oxford", "sneakers", "boots"},
+    "accessories": {"bags", "backpacks", "laptop bags", "jewelry", "watches", "belts"},
+}
 
 
 def validate_and_clean_categories(category_list):

@@ -128,6 +128,7 @@ async def download_images(messages, tg_client):
             grouped_messages[message.grouped_id].append(message)
 
         elif message.media and hasattr(message.media, 'photo'):  # Single photo
+            file = None
             try:
                 file = await tg_client.download_media(message.media)
                 if file:
@@ -148,6 +149,7 @@ async def download_images(messages, tg_client):
         for grouped_msg in msgs:
             if grouped_msg.media and hasattr(grouped_msg.media, 'photo'):
                 await asyncio.sleep(2)  # Rate limit
+                file = None
                 try:
                     file = await tg_client.download_media(grouped_msg.media)
                     if file:
