@@ -19,7 +19,7 @@ def store_raw_data(raw_data, collection_name='raw_data'):
         print(str(e))
     return False
 
-def fetch_all_channels(collection_name='channels_pool'):
+def fetch_all_channels(collection_name='channels'):
     try:
         collection = db[collection_name]
         channels = list(collection.find())

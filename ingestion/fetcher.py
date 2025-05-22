@@ -312,12 +312,16 @@ def extract_message_data(message_obj, channel_mongo_id):
 async def fetch_runner():
     await client.start()
     # todo 
-    ALL_CHANNEL_USERNAMES_AND_MONGO_IDS = [(channel["channel"], channel["channel_info_id"]) for channel in fetch_all_channels()]
+    ALL_CHANNEL_USERNAMES_AND_MONGO_IDS = [(channel["username"], channel["_id"]) for channel in fetch_all_channels()]
     # see if we have their info in db 
     for username, channel_id in tqdm(ALL_CHANNEL_USERNAMES_AND_MONGO_IDS, desc="Channels fetched: "):
         # last_fetched_info = fetch_last_fetched_info(channel_id)
         # last_fetched_id = last_fetched_info.get('last_fetched_id')
-        await fetch_unread_messages(username, channel_id, 0, client)
+        try:
+            await fetch_unread_messages(username, channel_id, 0, client)
+        except Exception as e:
+            print(f"Error fetching messages for {username}: {str(e)}")
+            continue
     await client.disconnect()
 
 
