@@ -95,58 +95,80 @@ album_buffer = defaultdict(list)
 album_timers = {}
 
 ALBUM_TIMEOUT = 2  # seconds to wait for all album parts
-
+TG_RATE_LIMITING_SECONDS = 2  # max requests per second
+last_request_time = 0  # to track last request time
 
 # request telegram api with rate limiting
-def request_with_rate_limit(func, *args, **kwargs):
-    async def wrapper():
-        try:
-            return await func(*args, **kwargs)
-        except errors.FloodWaitError as e:
-            print(f"Rate limit hit, waiting for {e.seconds} seconds")
-            await asyncio.sleep(e.seconds)
-            return await wrapper()  # Retry after waiting
-    return asyncio.create_task(wrapper())
+async def request_with_rate_limit(func, *args, **kwargs):
+    global last_request_time
+    current_time = asyncio.get_event_loop().time()
+    if current_time - last_request_time < TG_RATE_LIMITING_SECONDS:
+        sleep_time = TG_RATE_LIMITING_SECONDS - (current_time - last_request_time)
+        await asyncio.sleep(sleep_time)
+    last_request_time = asyncio.get_event_loop().time()
+    return await func(*args, **kwargs)
 
-async def process_album(grouped_id):
-    messages = album_buffer.pop(grouped_id, [])
-    # You can sort messages by .id or .date if needed
-    print(f"Processing album with grouped_id={grouped_id}, {len(messages)} parts")
-    # Example: process all images together
-    # await save_album_to_mongo(messages)
 
-def schedule_album_processing(grouped_id):
-    if grouped_id in album_timers:
-        album_timers[grouped_id].cancel()
-    album_timers[grouped_id] = asyncio.get_event_loop().call_later(
-        ALBUM_TIMEOUT, lambda: asyncio.create_task(process_album(grouped_id))
+async def process_album(grouped_id, chat_id):
+    key = (grouped_id, chat_id)
+    messages = album_buffer.pop(key, [])
+    if key in album_timers:
+        album_timers.pop(key)
+    if messages:
+        print(f"Album timeout reached: queueing album from channel={chat_id} with grouped_id={grouped_id}, {len(messages)} parts")
+        await message_queue.put(messages) 
+
+
+def schedule_album_processing(grouped_id, chat_id):
+    key = (grouped_id, chat_id)
+    if key in album_timers:
+        album_timers[key].cancel()
+    album_timers[key] = asyncio.get_event_loop().call_later(
+        ALBUM_TIMEOUT, lambda: asyncio.create_task(process_album(grouped_id, chat_id))
     )
 
 async def image_worker(tg_client):
     while True:
-        message, chat = await message_queue.get()
-        if not message or not chat:
-            message_queue.task_done()
-            continue
-        try:
-            if message.media:
-                if hasattr(message.media, 'photo'):
-                    # Handle photo
-                    print(f"✅ Processed new message from {chat.username}: {message.id}")
-                    # Save the image to MongoDB or perform any other processing
-                    # Example: await save_image_to_mongo(message)
-                elif hasattr(message.media, 'document'):
-                    # Handle document (could be a photo or other file)
-                    print(f"✅ Processed new document from {chat.username}: {message.id}")
-                    # Example: await save_document_to_mongo(message)
+        messages = await message_queue.get()
+        # messages is always a list of (message, chat) tuples
+        images = []
+        message_text = []
+
+        for message, chat in messages:
+            try:
+                message_text.append(message.message)
+                if message.media:
+                    if hasattr(message.media, 'photo'):
+                        print(f"✅ Downloading photo from {chat.username}: {message.id}")
+                        dir_path = f"downloads/{chat.username}"
+                        if not os.path.exists(dir_path):
+                            os.makedirs(dir_path)
+                        await request_with_rate_limit(
+                            tg_client.download_media, message.media.photo, f"{dir_path}/{message.id}.jpg"
+                        )
+                        image_url = f"{dir_path}/{message.id}.jpg"
+                        images.append(image_url)
+                        
+                    elif hasattr(message.media, 'document'):
+                        print(f"⚠️ Skipped document in message {message.id} from {chat.username}")
+                        # Handle document if needed
+                    else:
+                        print(f"⚠️ Unknown media type in message {message.id} from {chat.username}")
                 else:
-                    print(f"⚠️ Unknown media type in message {message.id} from {chat.username}")
-            else:
-                print(f"⚠️ No media in message {message.id} from {chat.username}")
-        except Exception as e:
-            print(f"Error processing message: {e}")
-        finally:
-            message_queue.task_done()
+                    print(f"⚠️ No media in message {message.id} from {chat.username}")
+            except Exception as e:
+                print(f"Error processing message: {e}")
+        message_queue.task_done()
+        text = " ".join(message_text).strip()
+        print(f"✅ Finished processing post: {text} from {chat.username}")
+        if images:
+            print(f"✅ Processed {len(images)} images from {chat.username}")
+            # Here you can save the images to MongoDB or process them further
+            # For example, you can insert into a collection
+            # db.images.insert_many([{"image_url": img, "text": text} for img, text in zip(images, message_text)])
+        else:
+            print("⚠️ No images to process in this batch")
+
 
 
 async def main():
@@ -174,11 +196,12 @@ async def main():
             message = event.message
             chat = event.chat
             grouped_id = getattr(message, "grouped_id", None)
-            if grouped_id:
-                album_buffer[grouped_id].append((message, chat))
-                schedule_album_processing(grouped_id)
+            chat_id = getattr(chat, "id", None)
+            if grouped_id and chat_id:
+                album_buffer[(grouped_id, chat_id)].append((message, chat))
+                schedule_album_processing(grouped_id, chat_id)
             else:
-                await message_queue.put((message, chat))
+                await message_queue.put([(message, chat)])  # Always put a list for consistency
                 print(f"✅ {message.id} enqueued from {chat.username}")
         except Exception as e:
             print(f"Error processing new message: {e}")
