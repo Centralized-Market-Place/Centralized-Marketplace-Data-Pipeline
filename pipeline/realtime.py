@@ -24,8 +24,8 @@ message_queue = asyncio.Queue()
 
 # all_channels = []  # Will be updated once per day
 all_channels = [
-    { "username":"@just_for_a_test", "_id": "1234567890"},
-    # { "username":"@just_for_a_test2", "_id": "1234567891"},
+    { "username":"@just_for_a_test", "_id": "1234567890" },
+    # { "username":"@just_for_a_test2", "_id": "1234567891" },
 ]
 
 def fetch_all_channels(collection_name='channels'):
@@ -81,6 +81,7 @@ async def refresh_channels_periodically(interval_hours=24):
                 if await is_participant(entity, me):
                     print(f"[INFO] Already a member of channel: {username}")
                     continue
+
                 print(f"[INFO] Attempting to join channel: {username}")
                 await asyncio.sleep(1)  # Avoid hitting rate limits
                 await client(JoinChannelRequest(username))
@@ -88,8 +89,6 @@ async def refresh_channels_periodically(interval_hours=24):
             except Exception as e:
                 print(f"[WARN] Could not join channel {username}: {e}")
         await asyncio.sleep(interval_hours * 3600)
-
-
 
 album_buffer = defaultdict(list)
 album_timers = {}
@@ -141,6 +140,7 @@ async def image_worker(tg_client):
                     if hasattr(message.media, 'photo'):
                         print(f"✅ Downloading photo from {chat.username}: {message.id}")
                         dir_path = f"downloads/{chat.username}"
+                        # pass asdlfjad
                         if not os.path.exists(dir_path):
                             os.makedirs(dir_path)
                         await request_with_rate_limit(

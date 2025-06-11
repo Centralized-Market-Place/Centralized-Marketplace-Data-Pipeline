@@ -202,9 +202,12 @@ def extract(text: str):
     try:
         result = process_description(text)    
         extracted = result.get("extracted") if isinstance(result, dict) else None
-
+        
+        if not extracted: 
+            return None, None
+        extracted['title'] = ensure_string(extracted.get('title', ''))
         # Skip the message if no title is extracted
-        if not extracted or not extracted.get("title"):
+        if not extracted.get("title"):
             return None, None
 
         try:

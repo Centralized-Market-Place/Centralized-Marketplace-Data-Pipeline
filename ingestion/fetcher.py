@@ -296,6 +296,7 @@ def extract_message_data(message_obj, channel_mongo_id):
             'shares': 0,
             'clicks': 0,
             'comments': 0,
+            'updated_by_seller': False,
             'embedding': doc_embedding, 
             'title': extracted.get('title'),
             'price': extracted.get('price'),
