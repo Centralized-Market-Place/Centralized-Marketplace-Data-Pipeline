@@ -132,6 +132,7 @@ Description:
 """
         response = ask_ai(prompt)
         raw = response
+        print(raw)
         match = re.search(r"\[.*\]", raw, re.DOTALL)
         if match:
             category_list = json.loads(match.group(0))
