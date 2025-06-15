@@ -21,7 +21,7 @@ from storage.generic_store import insert_document, update_document, update_docum
 from ingestion.image_upload import upload_with_eviction, upload_channel_thumbnail
 
 # Start Prometheus metrics server on port 9000
-start_http_server(9000)
+start_http_server(9090)
 
 MESSAGES_PROCESSED = Counter('messages_processed_total', 'Total messages processed')
 MESSAGES_SKIPPED = Counter('messages_skipped_total', 'Messages skipped (duplicates/unchanged)')
