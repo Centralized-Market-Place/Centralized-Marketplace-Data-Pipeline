@@ -10,3 +10,5 @@ cloudinary
 langgraph
 sentence_transformers
 groq
+logging
+prometheus_client
