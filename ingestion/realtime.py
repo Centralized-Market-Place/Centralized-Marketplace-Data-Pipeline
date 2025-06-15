@@ -12,10 +12,27 @@ from tqdm import tqdm
 from datetime import datetime, timezone
 from bson import ObjectId
 
+from prometheus_client import start_http_server, Counter, Gauge, Histogram
+import time
+
 # custom
 from processing.extractor import extract
 from storage.generic_store import insert_document, update_document, update_document_if_not_updated_by_seller, delete_document, find_documents
 from ingestion.image_upload import upload_with_eviction, upload_channel_thumbnail
+
+# Start Prometheus metrics server on port 9000
+start_http_server(9000)
+
+MESSAGES_PROCESSED = Counter('messages_processed_total', 'Total messages processed')
+MESSAGES_SKIPPED = Counter('messages_skipped_total', 'Messages skipped (duplicates/unchanged)')
+ALBUMS_PROCESSED = Counter('albums_processed_total', 'Albums processed')
+QUEUE_SIZE = Gauge('message_queue_size', 'Current message queue size')
+API_CALLS = Counter('telegram_api_calls_total', 'Telegram API calls made')
+RATE_LIMITS = Counter('rate_limit_events_total', 'Rate limit (FloodWait) events')
+ERRORS = Counter('processing_errors_total', 'Total processing errors')
+IMAGES_DOWNLOADED = Counter('images_downloaded_total', 'Images downloaded')
+FAILED_DOWNLOADS = Counter('failed_downloads_total', 'Failed image downloads')
+PROCESSING_TIME = Histogram('message_processing_seconds', 'Time spent processing a message')
 
 # Setup logging
 logger = logging.getLogger("CMP-Realtime")
@@ -63,7 +80,17 @@ async def request_with_rate_limit(func, *args, **kwargs):
             sleep_time = TG_RATE_LIMITING_SECONDS - (current_time - last_request_time)
             await asyncio.sleep(sleep_time)
         last_request_time = asyncio.get_event_loop().time()
-        return await func(*args, **kwargs)
+        API_CALLS.inc()
+        try:
+            return await func(*args, **kwargs)
+        except errors.FloodWait as e:
+            RATE_LIMITS.inc()
+            logger.warning(f"FloodWait: sleeping for {e.seconds} seconds")
+            await asyncio.sleep(e.seconds)
+            return await func(*args, **kwargs)
+        except Exception as e:
+            ERRORS.inc()
+            raise
 
 def fetch_all_channels(collection_name='channels-realtime-test'):
     global channel_id_to_full_info_map
@@ -79,6 +106,7 @@ def fetch_all_channels(collection_name='channels-realtime-test'):
         channel_id_to_full_info_map = new_channels_info_map
         return all_channels_ids
     except Exception as e:
+        ERRORS.inc()
         logger.error(str(e))
     return []
 
@@ -89,6 +117,10 @@ async def is_participant(channel, user) -> bool:
         await request_with_rate_limit(client.get_permissions, channel, user)
         return True
     except errors.UserNotParticipantError:
+        return False
+    except Exception as e:
+        ERRORS.inc()
+        logger.error(f"Error in is_participant: {e}")
         return False
 
 async def get_channel_about_and_participants_count(channel):
@@ -108,6 +140,7 @@ async def download_channel_thumbnail(channel, channel_id):
         secure_url = await upload_channel_thumbnail(photo_bytes)
         return secure_url, current_hash 
     except Exception as e:
+        ERRORS.inc()
         logger.error(f"Thumbnail upload failed for {channel.title}: {str(e)}")
         return None, None
 
@@ -134,6 +167,7 @@ async def fetch_channel_info(channel_id, entity):
         channel_info["thumbnail_hash"] = hashval
         return channel_info
     except Exception as e:
+        ERRORS.inc()
         logger.error(f"Error fetching channel info: {str(e)}")
         return None
 
@@ -159,6 +193,7 @@ async def refresh_channels_periodically(client, interval_hours=24):
                     channel_id_to_full_info_map[channel_id] = full_channel_info
                     break
                 except Exception as e:
+                    ERRORS.inc()
                     username = channel_id_to_full_info_map.get(channel_id, {}).get('username', '')
                     if username:
                         try:
@@ -166,6 +201,7 @@ async def refresh_channels_periodically(client, interval_hours=24):
                             channel_id = entity.id
                             logger.info(f"Resolved a username {username} to channel ID {channel_id} for username {username}.")
                         except Exception as e:
+                            ERRORS.inc()
                             logger.error(f"Could not fetch entity for channel {channel_id}: {e}")
                             break
                     else:
@@ -182,6 +218,7 @@ async def process_album(grouped_id, chat_id):
         album_timers.pop(key)
     if messages:
         logger.info(f"Album timeout reached: queueing album from channel={chat_id} with grouped_id={grouped_id}, {len(messages)} parts")
+        ALBUMS_PROCESSED.inc()
         await message_queue.put(messages) 
 
 def schedule_album_processing(grouped_id, chat_id):
@@ -200,6 +237,7 @@ def message_text_cleaner(text):
             return ""
         return text
     except Exception as e:
+        ERRORS.inc()
         logger.error(f"Error cleaning message text: {e}")
         return ""
 
@@ -231,6 +269,7 @@ def extract_message_data(message_obj, channel_mongo_id):
                     if emoji:
                         reactions_data.append((emoji, count))
         except Exception as e:
+            ERRORS.inc()
             logger.error(f"Error extracting reactions: {e}")
         return {
             'message_id': message_id,
@@ -244,6 +283,7 @@ def extract_message_data(message_obj, channel_mongo_id):
             'updated_at': datetime.now(timezone.utc),
         }
     except Exception as e:
+        ERRORS.inc()
         logger.error(f"Error processing message: {e}")
         return None
 
@@ -261,6 +301,7 @@ async def periodic_chat_update(limit):
                             sleep_time = TG_RATE_LIMITING_SECONDS - (current_time - last_request_time)
                             await asyncio.sleep(sleep_time)
                         last_request_time = asyncio.get_event_loop().time()
+                        API_CALLS.inc()
                         async for message in client.iter_messages(channel_id, limit=limit, offset_id=last_fetched_id):
                             old_messages.append(message)
                             last_fetched_id = min(last_fetched_id or float('inf'), message.id)
@@ -271,10 +312,12 @@ async def periodic_chat_update(limit):
                             sleep_time = TG_RATE_LIMITING_SECONDS - (current_time - last_request_time)
                             await asyncio.sleep(sleep_time)
                         last_request_time = asyncio.get_event_loop().time()
+                        API_CALLS.inc()
                         async for message in client.iter_messages(channel_id, limit=limit):
                             old_messages.append(message)
                             last_fetched_id = min(last_fetched_id or float('inf'), message.id)
         except Exception as e:
+            ERRORS.inc()
             logger.error(f"Error fetching messages for channel {channel_id}: {e}")
             continue
         for message in old_messages:
@@ -302,6 +345,7 @@ async def periodic_chat_update(limit):
                                 updated_values
                             )
             except Exception as e:
+                ERRORS.inc()
                 logger.error(f"Error processing message: {e}")
 
 async def periodic_chat_update_runner():
@@ -311,15 +355,18 @@ async def periodic_chat_update_runner():
             await periodic_chat_update(limit=30)
             logger.info(f"Completed periodic chat update at {datetime.now(timezone.utc)}")
         except Exception as e:
+            ERRORS.inc()
             logger.error(f"Periodic chat update failed: {e}")
         await asyncio.sleep(24 * 3600)
 
 async def image_worker(tg_client):
     while True:
+        QUEUE_SIZE.set(message_queue.qsize())
         messages = await message_queue.get()
         images = []
         message_text = []
         process_type = 0
+        start_time = time.time()
         for message, chat, p_type in messages:
             insert_document("raw_data", message.to_dict())
             process_type = p_type
@@ -327,6 +374,7 @@ async def image_worker(tg_client):
                 if message.message:
                     message_text.append(message.message)
             except Exception as e:
+                ERRORS.inc()
                 logger.error(f"Error getting message text: {e}")
         message_text_str = " ".join(message_text)
         cleaned_text = message_text_cleaner(message_text_str)
@@ -364,15 +412,19 @@ async def image_worker(tg_client):
                                             tg_client.download_media, message.media.photo
                                         )
                                         if file:
+                                            IMAGES_DOWNLOADED.inc()
                                             image_asset = await upload_with_eviction(file)
                                             if image_asset:
                                                 url = image_asset['url']
                                                 images.append(url)
                                             else:
+                                                FAILED_DOWNLOADS.inc()
                                                 logger.warning(f"Failed to upload image for message ID {message.id}")
                                         if file and os.path.exists(file):
                                             os.remove(file)
                                     except Exception as e:
+                                        FAILED_DOWNLOADS.inc()
+                                        ERRORS.inc()
                                         logger.error(f"Error downloading/uploading/removing image: {e}")
                                     finally:
                                         if file and os.path.exists(file):
@@ -384,6 +436,7 @@ async def image_worker(tg_client):
                             else:
                                 logger.warning(f"No media in message {message.id} from {chat.username}")
                         except Exception as e:
+                            ERRORS.inc()
                             logger.error(f"Error processing message: {e}")
                     message_data['images'] = images
                     if process_type == 0:
@@ -394,6 +447,8 @@ async def image_worker(tg_client):
                             message_data
                         )
                     logger.info(f"Processed message {message.id} from {chat.username} with {len(images)} images.")
+                    MESSAGES_PROCESSED.inc()
+        PROCESSING_TIME.observe(time.time() - start_time)
         message_queue.task_done()
 
 async def realtimeRunner():
@@ -423,6 +478,7 @@ async def realtimeRunner():
                 await message_queue.put([(message, chat, 0)])
                 logger.info(f"{message.id} enqueued from {chat.username}")
         except Exception as e:
+            ERRORS.inc()
             logger.error(f"Error processing new message: {e}")
     await asyncio.sleep(2)
     @client.on(events.MessageEdited(func=is_watched_channel))
@@ -439,6 +495,7 @@ async def realtimeRunner():
                 await message_queue.put([(message, chat, 1)])
                 logger.info(f"{message.id} edited and enqueued from {chat.username}")
         except Exception as e:
+            ERRORS.inc()
             logger.error(f"Error processing edited message: {e}")
     await asyncio.sleep(2)
     @client.on(events.MessageDeleted(func=is_watched_channel))
@@ -456,6 +513,7 @@ async def realtimeRunner():
                     else:
                         logger.info(f"Document not in DB")
         except Exception as e:
+            ERRORS.inc()
             logger.error(f"Error processing deleted message: {e}")
     await asyncio.sleep(2)
     logger.info("Listening for new messages...")
