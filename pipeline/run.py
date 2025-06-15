@@ -1,5 +1,14 @@
-# from pipeline.pipeline import run_pipeline
-import asyncio
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+# from ingestion.fetcher import fetch_runner
 from ingestion.realtime import realtimeRunner
+import asyncio
+
+async def run_pipeline():
+    # await fetch_runner()
+    await realtimeRunner()
+    
 if __name__ == "__main__":
-    asyncio.run(realtimeRunner())()
+    asyncio.run(run_pipeline())

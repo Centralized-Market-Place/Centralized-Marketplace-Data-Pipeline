@@ -18,8 +18,21 @@ from storage.generic_store import insert_document, update_document, update_docum
 from ingestion.image_upload import upload_with_eviction, upload_channel_thumbnail
 
 # Setup logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("CMP-Realtime")
+logger.setLevel(logging.INFO)
+
+# File handler
+fh = logging.FileHandler("service.log")
+fh.setLevel(logging.INFO)
+fh.setFormatter(logging.Formatter('%(asctime)s %(levelname)s %(name)s %(message)s'))
+
+# Console handler
+ch = logging.StreamHandler()
+ch.setLevel(logging.INFO)
+ch.setFormatter(logging.Formatter('%(asctime)s %(levelname)s %(name)s %(message)s'))
+
+logger.addHandler(fh)
+logger.addHandler(ch)
 
 API_ID = "21879721"
 API_HASH = "cadd93c819128f73ba3439a0f430e677"

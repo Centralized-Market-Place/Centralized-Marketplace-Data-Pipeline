@@ -1,5 +1,5 @@
 from apscheduler.schedulers.blocking import BlockingScheduler
-from pipeline.pipeline import run_pipeline
+from pipeline.run import run_pipeline
 
 scheduler = BlockingScheduler()
 scheduler.add_job(run_pipeline, 'interval', minutes=60)
