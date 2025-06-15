@@ -1,0 +1,48 @@
+2025-06-15 15:48:10,798 INFO CMP-Realtime Refreshed all_channels at 2025-06-15 15:48:10.797990+00:00. 3 channels loaded.
+2025-06-15 15:48:14,252 INFO CMP-Realtime Already a member of channel: 2500257537 > centeral_marketplace
+2025-06-15 15:48:18,105 INFO CMP-Realtime Thumbnail for channel test already exists in Cloudinary.
+2025-06-15 15:48:18,220 INFO CMP-DB-G Updated 0 document(s)
+2025-06-15 15:48:22,002 INFO CMP-Realtime Already a member of channel: 1454837810 > samcomptech
+2025-06-15 15:48:26,240 INFO CMP-Realtime Thumbnail for channel Sami Tech already exists in Cloudinary.
+2025-06-15 15:48:26,350 INFO CMP-DB-G Updated 0 document(s)
+2025-06-15 15:48:30,042 INFO CMP-Realtime Already a member of channel: 2672743939 > just_for_a_test
+2025-06-15 15:48:34,051 INFO CMP-DB-G Updated 0 document(s)
+2025-06-15 15:48:34,052 INFO CMP-Realtime Completed refresh of all channels at 2025-06-15 15:48:34.052134+00:00.
+2025-06-15 15:48:34,052 INFO CMP-Realtime Refreshed all channels: 3 channels loaded.
+2025-06-15 15:50:09,938 INFO CMP-Realtime Starting periodic chat update at 2025-06-15 15:50:09.938345+00:00
+2025-06-15 15:50:19,953 INFO CMP-Realtime Listening for new messages...
+2025-06-15 15:50:20,031 INFO CMP-Realtime Completed periodic chat update at 2025-06-15 15:50:20.031018+00:00
+2025-06-15 16:31:18,286 INFO CMP-Realtime Refreshed all_channels at 2025-06-15 16:31:18.286328+00:00. 3 channels loaded.
+2025-06-15 16:31:21,629 INFO CMP-Realtime Already a member of channel: 2500257537 > centeral_marketplace
+2025-06-15 16:35:52,478 INFO CMP-Realtime Refreshed all_channels at 2025-06-15 16:35:52.478793+00:00. 3 channels loaded.
+2025-06-15 16:35:55,797 INFO CMP-Realtime Already a member of channel: 2500257537 > centeral_marketplace
+2025-06-15 16:35:59,878 INFO CMP-Realtime Thumbnail for channel test already exists in Cloudinary.
+2025-06-15 16:35:59,992 INFO CMP-DB-G Updated 0 document(s)
+2025-06-15 16:36:03,853 INFO CMP-Realtime Already a member of channel: 1454837810 > samcomptech
+2025-06-15 16:36:08,016 INFO CMP-Realtime Thumbnail for channel Sami Tech already exists in Cloudinary.
+2025-06-15 16:36:08,130 INFO CMP-DB-G Updated 1 document(s)
+2025-06-15 16:36:11,908 INFO CMP-Realtime Already a member of channel: 2672743939 > just_for_a_test
+2025-06-15 16:36:15,819 INFO CMP-DB-G Updated 0 document(s)
+2025-06-15 16:36:15,819 INFO CMP-Realtime Completed refresh of all channels at 2025-06-15 16:36:15.819808+00:00.
+2025-06-15 16:36:15,820 INFO CMP-Realtime Refreshed all channels: 3 channels loaded.
+2025-06-15 16:37:51,714 INFO CMP-Realtime Starting periodic chat update at 2025-06-15 16:37:51.713968+00:00
+2025-06-15 16:38:01,727 INFO CMP-Realtime Listening for new messages...
+2025-06-15 16:38:01,800 INFO CMP-Realtime Completed periodic chat update at 2025-06-15 16:38:01.799962+00:00
+2025-06-15 16:38:27,239 INFO CMP-Realtime Album timeout reached: queueing album from channel=2672743939 with grouped_id=14000044039447876, 5 parts
+2025-06-15 16:38:27,362 INFO CMP-DB-G Inserted document with ID: 684ef7039f323933df474f60
+2025-06-15 16:38:27,475 INFO CMP-DB-G Inserted document with ID: 684ef7039f323933df474f61
+2025-06-15 16:38:27,589 INFO CMP-DB-G Inserted document with ID: 684ef7039f323933df474f62
+2025-06-15 16:38:27,703 INFO CMP-DB-G Inserted document with ID: 684ef7039f323933df474f63
+2025-06-15 16:38:27,816 INFO CMP-DB-G Inserted document with ID: 684ef7039f323933df474f64
+2025-06-15 16:38:32,150 INFO CMP-Realtime Downloading photo from just_for_a_test: 121
+2025-06-15 16:38:34,703 INFO CMP-DB-G Inserted document with ID: 684ef70a9f323933df474f66
+2025-06-15 16:38:34,704 INFO CMP-Realtime Downloading photo from just_for_a_test: 122
+2025-06-15 16:38:36,170 INFO CMP-DB-G Inserted document with ID: 684ef70c9f323933df474f67
+2025-06-15 16:38:36,171 INFO CMP-Realtime Downloading photo from just_for_a_test: 123
+2025-06-15 16:38:37,970 INFO CMP-DB-G Inserted document with ID: 684ef70d9f323933df474f68
+2025-06-15 16:38:37,971 INFO CMP-Realtime Downloading photo from just_for_a_test: 124
+2025-06-15 16:38:39,743 INFO CMP-DB-G Inserted document with ID: 684ef70f9f323933df474f69
+2025-06-15 16:38:39,744 INFO CMP-Realtime Downloading photo from just_for_a_test: 125
+2025-06-15 16:38:41,807 INFO CMP-DB-G Inserted document with ID: 684ef7119f323933df474f6a
+2025-06-15 16:38:41,935 INFO CMP-DB-G Inserted document with ID: 684ef7119f323933df474f6b
+2025-06-15 16:38:41,935 INFO CMP-Realtime Processed message 125 from just_for_a_test with 5 images.
