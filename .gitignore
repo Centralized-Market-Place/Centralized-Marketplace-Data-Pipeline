@@ -2,3 +2,9 @@ venv/
 config/secrets.env
 data/logs/
 .env
+__pycache__/
+*/__pycache__/
+**/__pycache__/
+*.pyc
+telegram_client.session*
+service.log
