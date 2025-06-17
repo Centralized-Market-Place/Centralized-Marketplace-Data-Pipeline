@@ -139,7 +139,7 @@ Subcategories:
 
 Return a JSON list (from general to specific), 3+ levels if possible.
 Do not invent new terms.
-No explanations. JSON only.
+No explanations. One JSON only.
 
 Examples:
 - ["technology", "phones", "smartphones", "android"]
