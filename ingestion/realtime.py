@@ -366,7 +366,7 @@ async def periodic_chat_update(limit):
                         existing_message = find_one_document("structured_products",
                             query={
                                 'message_id': message_data['message_id'],
-                                'channel_id': message_data['telegram_channel_id']
+                                'telegram_channel_id': message_data['telegram_channel_id']
                             }
                         )
                         if existing_message:
@@ -376,12 +376,19 @@ async def periodic_chat_update(limit):
                             )
                         else:
                             # enqueue no group messages for processing
+                            # Always enqueue messages as a list of (message, entity, 2) tuples
+                            
                             if not message.grouped_id:
                                 await message_queue.put([(message, entity, 2)])
                                 logger.info(f"Enqueued single message {message.id} from {channel_id} for processing.")
                             else:
                                 groups[message.grouped_id].append((message, entity, 2))
-                            
+                    else:
+                        logger.warning(f"Message data extraction failed for message {message.id} in channel {channel_id}. Skipping.")
+                        continue
+                else:
+                    logger.warning(f"Mongo ID not found for channel {channel_id}. Skipping message {message.id}.")
+                    continue       
             except Exception as e:
                 ERRORS.inc()
                 logger.error(f"Error processing message: {e}")
