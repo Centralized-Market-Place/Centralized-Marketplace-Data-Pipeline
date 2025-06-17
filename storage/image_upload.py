@@ -8,14 +8,18 @@ import cloudinary
 import cloudinary.uploader
 import cloudinary.api
 from storage.generic_store import insert_document, find_documents, delete_document, update_document
+from dotenv import load_dotenv
+load_dotenv()
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 
-# cloudinary
-CLOUD_NAME = "di46hiehs"
-API_KEY = "238679894441775"
-API_SECRET = "M6-xzfdi-BO96d_9chO4WwPWGcY"
+
+CLOUD_NAME = os.getenv("CLOUDINARY_CLOUD_NAME")
+API_KEY = os.getenv("CLOUDINARY_API_KEY")
+API_SECRET = os.getenv("CLOUDINARY_API_SECRET")
+if not CLOUD_NAME or not API_KEY or not API_SECRET:
+    raise ValueError("Cloudinary credentials are not set in environment variables.")
 
 cloudinary.config(
     cloud_name=CLOUD_NAME,
@@ -76,6 +80,21 @@ async def check_and_evict(message_date, required_space=0):
         return False
 
 
+def check_DB(message_id, channel_id):
+    """
+    Check if a file is already uploaded in the database.
+    Returns the first matching document or None if not found.
+    """
+    try:
+        matches = find_documents("cloudinary_assets_v2", {"channel_id": channel_id, "message_id": message_id})
+        if matches:
+            return matches[0]  # Return the first match
+        return None
+    except Exception as e:
+        print(f"Error checking DB: {str(e)}")
+        return None
+
+
 async def upload_with_eviction(file_path, asset_type="post_photo", channel_id=None, message_id=None, message_date=None):
     """
     Upload a file to Cloudinary, evicting LRU assets if storage limit is exceeded.
@@ -83,6 +102,7 @@ async def upload_with_eviction(file_path, asset_type="post_photo", channel_id=No
     """
 
     try:
+        
         file_size = os.path.getsize(file_path)
 
         # Evict if necessary

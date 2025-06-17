@@ -1,10 +1,19 @@
+import os
+from dotenv import load_dotenv
 from datetime import datetime, timezone
 from tqdm import tqdm
 from pymongo import MongoClient
 import logging
+load_dotenv()
 
-MONGO_URI="mongodb+srv://semahegnsahib:sahib@cluster0.vmyk3.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
-DB_NAME="centeral_marketplace"
+
+
+MONGO_URI = os.getenv("MONGO_URI")
+DB_NAME = os.getenv("DB_NAME", "centeral_marketplace")
+
+if not MONGO_URI:
+    raise ValueError("MONGO_URI is not set in environment variables.")
+
 client = MongoClient(MONGO_URI)
 db = client[DB_NAME]
 
@@ -42,6 +51,20 @@ def find_documents(collection_name, query=None, sort_field=None, sort_order=1):
     if sort_field:
         cursor = cursor.sort(sort_field, sort_order)
     return list(cursor)
+
+def find_one_document(collection_name, filter_query):
+    """Find a single document matching the filter."""
+    try:
+        document = db[collection_name].find_one(filter_query)
+        if document:
+            return document
+        else:
+            return None
+    except Exception as e:
+        logger.error(f"❌ Find failed: {str(e)}")
+        return None
+
+
 
 def delete_document(collection_name, filter_query):
     """Delete a single document matching the filter."""

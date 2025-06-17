@@ -5,12 +5,13 @@ from langgraph.graph import StateGraph, END
 from typing import TypedDict
 import threading
 import os
-from processing.price_cleaner import clean_price
+from processing.price_cleaner import clean_price, sanitize_price
 from processing.category_validator import validate_and_clean_categories, ensure_list, ensure_string
 from processing.sentence_transformer import transform
 from groq import Groq
 import logging
-
+from dotenv import load_dotenv
+load_dotenv()
 
 # Setup logging
 logger = logging.getLogger("CMP-AI")
@@ -31,11 +32,16 @@ logger.addHandler(ch)
 
 
 # Initialize Groq client
-groq_client = Groq(
-    api_key=os.environ.get("GROQ_API_KEY") or "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",
-)
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
+AI_MODEL = os.environ.get("GROQ_MODEL", "meta-llama/llama-4-scout-17b-16e-instruct")
+if not GROQ_API_KEY:
+    raise ValueError("GROQ_API_KEY is not set in environment variables.")
 
-AI_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct" 
+
+groq_client = Groq(api_key=GROQ_API_KEY)
+
+
+# AI_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct" 
 MAX_CHAR_LENGTH = 2000
 
 # Simple rate limiter: allow 1 request per second
@@ -147,7 +153,6 @@ Description:
 """
         response = ask_ai(prompt)
         raw = response
-        logger.info(raw)
         match = re.search(r"\[.*\]", raw, re.DOTALL)
         if match:
             category_list = json.loads(match.group(0))
@@ -219,7 +224,7 @@ def extract(text, AI_API_CALLS, AI_ERRORS, AI_PROCESSING_TIME):
     # Prometheus: AI_API_CALLS, AI_ERRORS, AI_PROCESSING_TIME
     try:
         start_time = time.time()
-        result = process_description(text)    
+        result = process_description(text, AI_API_CALLS)    
         extracted = result.get("extracted") if isinstance(result, dict) else None
         
         if not extracted: 
@@ -230,7 +235,7 @@ def extract(text, AI_API_CALLS, AI_ERRORS, AI_PROCESSING_TIME):
             return None, None
 
         try:
-            extracted['price'] = clean_price(extracted.get('price'))
+            extracted['price'] = sanitize_price(extracted.get('price'), text)
         except Exception as e:
             logger.error("❌ Error trying to clean price")
 

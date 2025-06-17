@@ -7,17 +7,22 @@ import hashlib
 import logging
 
 from tqdm import tqdm
-# from dotenv import dotenv_values
 from datetime import datetime, timezone
 from bson import ObjectId
 
 from prometheus_client import start_http_server, Counter, Gauge, Histogram
 import time
 
+from dotenv import load_dotenv
+load_dotenv()
+
 # custom
 from processing.extractor import extract
-from storage.generic_store import insert_document, update_document, update_document_if_not_updated_by_seller, delete_document, find_documents
-from storage.image_upload import upload_with_eviction, upload_channel_thumbnail
+from storage.generic_store import insert_document, update_document, update_document_if_not_updated_by_seller, delete_document, find_documents, find_one_document
+from storage.image_upload import upload_with_eviction, upload_channel_thumbnail, check_DB
+
+
+
 
 # Start Prometheus metrics server on port 9000
 start_http_server(9000)
@@ -53,9 +58,23 @@ ch.setFormatter(logging.Formatter('%(asctime)s %(levelname)s %(name)s %(message)
 logger.addHandler(fh)
 logger.addHandler(ch)
 
-API_ID = "21879721"
-API_HASH = "cadd93c819128f73ba3439a0f430e677"
-SESSION_NAME = 'telegram_client'
+
+
+
+API_ID = os.getenv("API_ID")
+API_HASH = os.getenv("API_HASH")
+SESSION_NAME = os.getenv("SESSION_NAME", 'telegram_client')
+
+if not API_ID or not API_HASH:
+    logger.error("API_ID and API_HASH must be set in environment variables.")
+    raise ValueError("API_ID and API_HASH must be set in environment variables.")
+
+
+
+
+
+
+
 
 client = TelegramClient(SESSION_NAME, API_ID, API_HASH)
 message_queue = asyncio.Queue()
@@ -302,8 +321,12 @@ async def periodic_chat_update(limit):
     for channel_id in tqdm(all_channels, desc="Fetching messages for refresh: "):
         last_fetched_id = None
         old_messages = []
+        entity = None
+        
         try:
-            for _ in range(2):
+            entity = await request_with_rate_limit(client.get_entity, channel_id)
+
+            for _ in range(3):
                 if last_fetched_id is not None:
                     async with rate_limit_lock:
                         current_time = asyncio.get_event_loop().time()
@@ -330,6 +353,8 @@ async def periodic_chat_update(limit):
             ERRORS.inc()
             logger.error(f"Error fetching messages for channel {channel_id}: {e}")
             continue
+
+        groups = defaultdict(list)
         for message in old_messages:
             try:
                 mongo_id = channel_id_to_full_info_map.get(channel_id, {}).get('_id')
@@ -342,21 +367,31 @@ async def periodic_chat_update(limit):
                             'views': message_data['views'],
                             'reactions': message_data['reactions'],
                         }
-                        matches = find_documents("structured_products-realtime-test",
+                        existing_message = find_one_document("structured_products-realtime-test",
                             query={
                                 'message_id': message_data['message_id'],
                                 'channel_id': message_data['telegram_channel_id']
                             }
                         )
-                        existing_message = matches[0] if matches else None
                         if existing_message:
                             update_document_if_not_updated_by_seller("structured_products-realtime-test",
                                 {'message_id': message_data['message_id'], 'telegram_channel_id': message_data['telegram_channel_id']},
                                 updated_values
                             )
+                        else:
+                            # enqueue no group messages for processing
+                            if not message.grouped_id:
+                                await message_queue.put([(message, entity, 2)])
+                                logger.info(f"Enqueued single message {message.id} from {channel_id} for processing.")
+                            else:
+                                groups[message.grouped_id].append((message, entity, 2))
+                            
             except Exception as e:
                 ERRORS.inc()
                 logger.error(f"Error processing message: {e}")
+
+        for grouped_id, messages in groups.items():
+            await message_queue.put(messages)
 
 async def periodic_chat_update_runner():
     while True:
@@ -402,7 +437,7 @@ async def image_worker(tg_client):
                     message_data['phone'] = extracted.get('phone')
                     message_data['link'] = extracted.get('link')
                     message_data['categories'] = extracted.get('categories', [])
-                    if process_type == 0:
+                    if process_type == 0 or process_type == 2:
                         message_data['upvotes'] = 0
                         message_data['downvotes'] = 0
                         message_data['shares'] = 0
@@ -418,12 +453,22 @@ async def image_worker(tg_client):
                                 if hasattr(message.media, 'photo'):
                                     logger.info(f"Downloading photo from {chat.username}: {message.id}")
                                     try:
+                                        # check DB
+                                        if process_type == 2:
+                                            match = check_DB(message_data.get('message_id'), message_data.get('telegram_channel_id'))
+                                            if match:
+                                                url = match.get('url')
+                                                if url:
+                                                    images.append(url)
+                                                    logger.info(f"Image already exists in DB for message {message.id} from {chat.username}")
+                                                    continue
                                         file = await request_with_rate_limit(
                                             tg_client.download_media, message.media.photo
                                         )
                                         if file:
                                             IMAGES_DOWNLOADED.inc()
-                                            image_asset = await upload_with_eviction(file)
+                                            # upload message_id, channel_id
+                                            image_asset = await upload_with_eviction(file, message_id=message_data.get('message_id'), channel_id=message_data.get('telegram_channel_id'))
                                             if image_asset:
                                                 url = image_asset['url']
                                                 images.append(url)
@@ -449,7 +494,7 @@ async def image_worker(tg_client):
                             ERRORS.inc()
                             logger.error(f"Error processing message: {e}")
                     message_data['images'] = images
-                    if process_type == 0:
+                    if process_type == 0 or process_type == 2:
                         insert_document("structured_products-realtime-test", message_data)
                     else:
                         update_document_if_not_updated_by_seller("structured_products-realtime-test",

@@ -34,3 +34,32 @@ def clean_price(raw_price):
         return float(number)
     except ValueError:
         return None
+
+
+
+def sanitize_price(price, desc):
+    """
+    Cleans and sanitizes a price value.
+    Returns a float if valid, None otherwise.
+    """
+    yes = False
+    price = clean_price(price)
+    if price is None:
+        return None
+    
+    try:
+        for i in range(10, 0, -1):
+            pr = str(price) + ('0'*i)
+            if pr in desc:
+                price = float(pr.replace('.', ''))
+                yes = True
+                break
+        
+        if not yes:
+            pr = str(price)
+            if pr + 'k' in desc or pr + 'K' in desc:
+                price = float(pr.replace('.', '')) * 1000  
+        return price
+    except Exception as e:
+        print(f"❌ Error sanitizing price '{price}' {e}")
+        return None
