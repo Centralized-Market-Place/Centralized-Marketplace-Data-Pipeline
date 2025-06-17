@@ -2,12 +2,18 @@ from pymongo import MongoClient
 from tqdm import tqdm
 # from dotenv import dotenv_values
 from datetime import datetime, timezone
+import os
+from dotenv import load_dotenv
+load_dotenv()
 
-MONGO_URI="mongodb+srv://semahegnsahib:sahib@cluster0.vmyk3.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
-DATABASE_NAME="centeral_marketplace"
-# config = dotenv_values('secrets.env')
+
+
+MONGO_URI = os.getenv("MONGO_URI")
+DB_NAME = os.getenv("DB_NAME", "centeral_marketplace")
+
+
 mongo_client = MongoClient(MONGO_URI)
-db = mongo_client[DATABASE_NAME]
+db = mongo_client[DB_NAME]
 
 def store_raw_data(raw_data, collection_name='raw_data'):
     try:

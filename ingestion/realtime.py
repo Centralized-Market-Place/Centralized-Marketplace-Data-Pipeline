@@ -71,11 +71,6 @@ if not API_ID or not API_HASH:
 
 
 
-
-
-
-
-
 client = TelegramClient(SESSION_NAME, API_ID, API_HASH)
 message_queue = asyncio.Queue()
 

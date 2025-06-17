@@ -4,8 +4,8 @@ from telethon.sync import TelegramClient
 from telethon.tl.functions.channels import JoinChannelRequest, GetFullChannelRequest
 from pymongo import MongoClient
 
-MONGO_URI="mongodb+srv://semahegnsahib:sahib@cluster0.vmyk3.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
-DATABASE_NAME="centeral_marketplace"
+MONGO_URI=""
+DATABASE_NAME=""
 # config = dotenv_values('secrets.env')
 mongo_client = MongoClient(MONGO_URI)
 db = mongo_client[DATABASE_NAME]
@@ -77,9 +77,7 @@ def update_or_insert_channel(channel_info):
         {"$set": channel_info},
         upsert=True
     )
-API_ID = "21879721"
-API_HASH = "cadd93c819128f73ba3439a0f430e677"
-SESSION_NAME = 'telegram_client'
+
 # if __name__ == "__main__":
 #     client = TelegramClient(SESSION_NAME, API_ID, API_HASH)
 #     asyncio.run(fetch_all_channels_runner(client))
