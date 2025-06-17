@@ -108,7 +108,7 @@ async def request_with_rate_limit(func, *args, **kwargs):
             ERRORS.inc()
             raise
 
-def fetch_all_channels(collection_name='channels-realtime-test'):
+def fetch_all_channels(collection_name='channels'):
     global channel_id_to_full_info_map
     try:
         all_channels_from_db = find_documents(collection_name, query=None, sort_field=None, sort_order=1)
@@ -213,7 +213,7 @@ async def refresh_channels_periodically(client, interval_hours=24):
                         logger.info(f"Skipping update for channel {channel_id} as it is already updated by seller.")
                         continue 
 
-                    upsert_id = update_document("channels-realtime-test", { "telegram_id": channel_id }, full_channel_info)
+                    upsert_id = update_document("channels", { "telegram_id": channel_id }, full_channel_info)
                     if upsert_id:
                         full_channel_info['_id'] = upsert_id
                     else:

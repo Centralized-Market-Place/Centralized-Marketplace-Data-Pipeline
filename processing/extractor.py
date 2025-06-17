@@ -141,7 +141,7 @@ Subcategories:
 - accessories: ["bags", "backpacks", "laptop bags", "jewelry", "watches", "belts"]
 
 Return a JSON list (from general to specific), 3+ levels if possible.
-Do not invent new terms.
+Do not add terms not mentioned above.
 No explanations. One JSON only.
 
 Examples:
