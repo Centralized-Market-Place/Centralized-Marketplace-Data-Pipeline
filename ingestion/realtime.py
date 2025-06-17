@@ -459,16 +459,17 @@ async def image_worker(tg_client):
                             if message.media:
                                 if hasattr(message.media, 'photo'):
                                     logger.info(f"Downloading photo from {chat.username}: {message.id}")
+                                    if process_type == 2:
+                                        match = check_DB(message_data.get('message_id'), message_data.get('telegram_channel_id'))
+                                        if match:
+                                            url = match.get('url')
+                                            if url:
+                                                images.append(url)
+                                                logger.info(f"Image already exists in DB for message {message.id} from {chat.username}")
+                                                continue
                                     try:
                                         # check DB
-                                        if process_type == 2:
-                                            match = check_DB(message_data.get('message_id'), message_data.get('telegram_channel_id'))
-                                            if match:
-                                                url = match.get('url')
-                                                if url:
-                                                    images.append(url)
-                                                    logger.info(f"Image already exists in DB for message {message.id} from {chat.username}")
-                                                    continue
+                                        
                                         file = await request_with_rate_limit(
                                             tg_client.download_media, message.media.photo
                                         )
