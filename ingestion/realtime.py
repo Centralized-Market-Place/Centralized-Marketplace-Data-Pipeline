@@ -367,7 +367,7 @@ async def periodic_chat_update(limit):
                             'reactions': message_data['reactions'],
                         }
                         existing_message = find_one_document("structured_products",
-                            query={
+                            filter_query={
                                 'message_id': message_data['message_id'],
                                 'telegram_channel_id': message_data['telegram_channel_id']
                             }
