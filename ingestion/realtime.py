@@ -6,7 +6,6 @@ from collections import defaultdict
 import hashlib
 import logging
 
-from pymongo import MongoClient
 from tqdm import tqdm
 # from dotenv import dotenv_values
 from datetime import datetime, timezone
@@ -33,6 +32,9 @@ ERRORS = Counter('processing_errors_total', 'Total processing errors')
 IMAGES_DOWNLOADED = Counter('images_downloaded_total', 'Images downloaded')
 FAILED_DOWNLOADS = Counter('failed_downloads_total', 'Failed image downloads')
 PROCESSING_TIME = Histogram('message_processing_seconds', 'Time spent processing a message')
+AI_API_CALLS = Counter('ai_api_calls_total', 'Total AI API calls made')
+AI_ERRORS = Counter('ai_api_errors_total', 'Total AI API errors')
+AI_PROCESSING_TIME = Histogram('ai_processing_seconds', 'Time spent processing AI tasks')
 
 # Setup logging
 logger = logging.getLogger("CMP-Realtime")
@@ -99,6 +101,9 @@ def fetch_all_channels(collection_name='channels-realtime-test'):
         all_channels_ids = []
         new_channels_info_map = {}
         for channel in all_channels_from_db:
+            if channel.get('is_deleted') or channel.get('is_suspended') or channel.get('scam'):
+                continue
+
             if channel and 'telegram_id' in channel:
                 channel_id = channel['telegram_id']
                 all_channels_ids.append(channel_id)
@@ -189,6 +194,11 @@ async def refresh_channels_periodically(client, interval_hours=24):
                         await request_with_rate_limit(client, JoinChannelRequest(username))
                         logger.info(f"Joined channel: {channel_id}")
                     full_channel_info = await fetch_channel_info(channel_id, entity)
+                    
+                    if not full_channel_info or channel_id_to_full_info_map.get(channel_id, {}).get('is_updated', False):
+                        logger.info(f"Skipping update for channel {channel_id} as it is already updated by seller.")
+                        continue 
+
                     update_document("channels-realtime-test", { "telegram_id": channel_id }, full_channel_info)
                     channel_id_to_full_info_map[channel_id] = full_channel_info
                     break
@@ -379,7 +389,7 @@ async def image_worker(tg_client):
         message_text_str = " ".join(message_text)
         cleaned_text = message_text_cleaner(message_text_str)
         if cleaned_text:
-            extracted, doc_embedding = extract(cleaned_text)
+            extracted, doc_embedding = extract(cleaned_text, AI_API_CALLS, AI_ERRORS, AI_PROCESSING_TIME)
             if extracted:
                 mongo_id = channel_id_to_full_info_map.get(chat.id, {}).get('_id')
                 message_data = extract_message_data(message.to_dict(), mongo_id)
@@ -398,8 +408,8 @@ async def image_worker(tg_client):
                         message_data['shares'] = 0
                         message_data['clicks'] = 0
                         message_data['comments'] = 0
-                        message_data['updated_by_seller'] = False
-                        message_data['deleted_by_seller'] = False
+                        message_data['is_updated'] = False
+                        message_data['is_deleted'] = False
                         message_data['is_available'] = True
                         message_data['created_at'] = message_data['updated_at']
                     for message, chat, p_type in messages:

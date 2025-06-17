@@ -9,7 +9,25 @@ from processing.price_cleaner import clean_price
 from processing.category_validator import validate_and_clean_categories, ensure_list, ensure_string
 from processing.sentence_transformer import transform
 from groq import Groq
+import logging
 
+
+# Setup logging
+logger = logging.getLogger("CMP-Realtime")
+logger.setLevel(logging.INFO)
+
+# File handler
+fh = logging.FileHandler("service.log")
+fh.setLevel(logging.INFO)
+fh.setFormatter(logging.Formatter('%(asctime)s %(levelname)s %(name)s %(message)s'))
+
+# Console handler
+ch = logging.StreamHandler()
+ch.setLevel(logging.INFO)
+ch.setFormatter(logging.Formatter('%(asctime)s %(levelname)s %(name)s %(message)s'))
+
+logger.addHandler(fh)
+logger.addHandler(ch)
 
 # === API Constants ===
 # API_KEY = "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"      # Gelo
@@ -65,10 +83,10 @@ def is_product_tool(input_text: str) -> bool:
         response = ask_ai(prompt)
         content = response.lower()
         is_product = ("yes" in content) and ("no" not in content)
-        print(f"LLM Product Decision: '{content}', Is Product: {is_product}")
+        logger.info(f"LLM Product Decision: '{content}', Is Product: {is_product}")
         return is_product
     except Exception as e:
-        print(f"❌ Product check failed: {e}")
+        logger.error(f"❌ Product check failed: {e}")
         return False
 
 # === Step 2: Extract Entities ===
@@ -93,16 +111,16 @@ Post:
         if match:
             try:
                 extracted_data = json.loads(match.group(0))
-                print(f"✅ Extracted")
+                logger.info(f"✅ Extracted")
                 return {"extracted": extracted_data}
             except Exception as e:
-                print(f"❌ Extraction error (json.loads): {e}")
+                logger.error(f"❌ Extraction error (json.loads): {e}")
                 return {"error": f"Extraction error: {str(e)}", "raw_response": match.group(0)}
         else:
-            print("⚠️ No JSON object found.")
+            logger.warning("⚠️ No JSON object found.")
             return {"error": "No JSON found in response", "raw_response": raw}
     except Exception as e:
-        print(f"❌ Extraction error: {e}")
+        logger.error(f"❌ Extraction error: {e}")
         return {"error": f"Extraction error: {str(e)}", "raw_response": raw if 'raw' in locals() else ""}
 
 # === Step 3: Extract Hierarchical Categories ===
@@ -132,16 +150,16 @@ Description:
 """
         response = ask_ai(prompt)
         raw = response
-        print(raw)
+        logger.info(raw)
         match = re.search(r"\[.*\]", raw, re.DOTALL)
         if match:
             category_list = json.loads(match.group(0))
             return category_list
         else:
-            print("⚠️ No valid JSON list found for categories.")
+            logger.warning("⚠️ No valid JSON list found for categories.")
             return []
     except Exception as e:
-        print(f"❌ Category extraction error: {e}")
+        logger.error(f"❌ Category extraction error: {e}")
         return []
 
 # === Graph Nodes ===
@@ -186,21 +204,24 @@ def truncate_input(text: str) -> str:
     return text[:MAX_CHAR_LENGTH]
 
 # === Run Single Description ===
-def process_description(input_text: str):
+def process_description(input_text, AI_APT_CALLS):
     if not input_text.strip():
         return 
     
     input_text = truncate_input(input_text)
+    AI_APT_CALLS.inc()
     result = app.invoke({"post": input_text.strip()})
     if result.get("decision") == "extract":
         return result.get("result")
     else:
-        print("Post was skipped (not a product).")
+        logger.info("Post was skipped (not a product).")
     
     return None
 
-def extract(text: str):
+def extract(text, AI_API_CALLS, AI_ERRORS, AI_PROCESSING_TIME):
+    # Prometheus: AI_API_CALLS, AI_ERRORS, AI_PROCESSING_TIME
     try:
+        start_time = time.time()
         result = process_description(text)    
         extracted = result.get("extracted") if isinstance(result, dict) else None
         
@@ -214,16 +235,18 @@ def extract(text: str):
         try:
             extracted['price'] = clean_price(extracted.get('price'))
         except Exception as e:
-            print("❌ Error trying to clean price")
+            logger.error("❌ Error trying to clean price")
 
         extracted['categories'] = validate_and_clean_categories(extracted.get('categories', []))
         extracted['location'] = ensure_string(extracted.get('location', ''))
         extracted['phone'] = ensure_list(extracted.get('phone', []))
         extracted['link'] = ensure_list(extracted.get('link', []))
         doc_embedding = transform(text)
+        AI_PROCESSING_TIME.observe(time.time() - start_time)
         return extracted, doc_embedding
     except Exception as e:
-        print(f"Error processing message: {e}")
+        AI_ERRORS.inc()
+        logger.error(f"Error processing message: {e}")
         return None, None
 
 # # === Example Usage ===
