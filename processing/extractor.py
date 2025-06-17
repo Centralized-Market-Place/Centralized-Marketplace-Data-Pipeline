@@ -13,7 +13,7 @@ import logging
 
 
 # Setup logging
-logger = logging.getLogger("CMP-Realtime")
+logger = logging.getLogger("CMP-AI")
 logger.setLevel(logging.INFO)
 
 # File handler
