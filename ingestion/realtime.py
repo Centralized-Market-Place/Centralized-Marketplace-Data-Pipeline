@@ -382,6 +382,7 @@ async def periodic_chat_update(limit):
                             # Always enqueue messages as a list of (message, entity, 2) tuples
                             
                             if not message.grouped_id:
+                                
                                 await message_queue.put([(message, entity, 2)])
                                 logger.info(f"Enqueued single message {message.id} from {channel_id} for processing.")
                             else:
@@ -428,6 +429,7 @@ async def image_worker(tg_client):
             except Exception as e:
                 ERRORS.inc()
                 logger.error(f"Error getting message text: {e}")
+
         message_text_str = " ".join(message_text)
         cleaned_text = message_text_cleaner(message_text_str)
         if cleaned_text:
