@@ -111,7 +111,7 @@ async def request_with_rate_limit(func, *args, **kwargs):
 def fetch_all_channels(collection_name='channels'):
     global channel_id_to_full_info_map
     try:
-        all_channels_from_db = find_documents(collection_name, query=None, sort_field=None, sort_order=1)
+        all_channels_from_db = find_documents(collection_name, query=None, sort_field=None, sort_order=-1)
         all_channels_ids = []
         new_channels_info_map = {}
         for channel in all_channels_from_db:
@@ -378,8 +378,6 @@ async def periodic_chat_update(limit):
                                 updated_values
                             )
                         else:
-                            # enqueue no group messages for processing
-                            # Always enqueue messages as a list of (message, entity, 2) tuples
                             
                             if not message.grouped_id:
 
@@ -405,7 +403,7 @@ async def periodic_chat_update_runner():
     while True:
         try:
             logger.info(f"Starting periodic chat update at {datetime.now(timezone.utc)}")
-            await periodic_chat_update(limit=30)
+            await periodic_chat_update(limit=10)
             logger.info(f"Completed periodic chat update at {datetime.now(timezone.utc)}")
         except Exception as e:
             ERRORS.inc()
