@@ -517,7 +517,7 @@ async def realtimeRunner():
     await client.start()
     asyncio.create_task(refresh_channels_periodically(client))
     asyncio.create_task(image_worker(client))
-    await asyncio.sleep(2*60)
+    await asyncio.sleep(10*60)
     asyncio.create_task(periodic_chat_update_runner())
     await asyncio.sleep(2)
     def is_watched_channel(event):
@@ -526,6 +526,7 @@ async def realtimeRunner():
             return False
         return chat_id in all_channels
     await asyncio.sleep(2)
+
     @client.on(events.NewMessage(func=is_watched_channel))
     async def handler(event):
         try:
@@ -543,6 +544,7 @@ async def realtimeRunner():
             ERRORS.inc()
             logger.error(f"Error processing new message: {e}")
     await asyncio.sleep(2)
+
     @client.on(events.MessageEdited(func=is_watched_channel))
     async def edit_handler(event):
         try:
@@ -560,6 +562,7 @@ async def realtimeRunner():
             ERRORS.inc()
             logger.error(f"Error processing edited message: {e}")
     await asyncio.sleep(2)
+
     @client.on(events.MessageDeleted(func=is_watched_channel))
     async def delete_handler(event):
         try:
