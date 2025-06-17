@@ -362,14 +362,14 @@ async def periodic_chat_update(limit):
                             'views': message_data['views'],
                             'reactions': message_data['reactions'],
                         }
-                        existing_message = find_one_document("structured_products-realtime-test",
+                        existing_message = find_one_document("structured_products",
                             query={
                                 'message_id': message_data['message_id'],
                                 'channel_id': message_data['telegram_channel_id']
                             }
                         )
                         if existing_message:
-                            update_document_if_not_updated_by_seller("structured_products-realtime-test",
+                            update_document_if_not_updated_by_seller("structured_products",
                                 {'message_id': message_data['message_id'], 'telegram_channel_id': message_data['telegram_channel_id']},
                                 updated_values
                             )
@@ -490,9 +490,9 @@ async def image_worker(tg_client):
                             logger.error(f"Error processing message: {e}")
                     message_data['images'] = images
                     if process_type == 0 or process_type == 2:
-                        insert_document("structured_products-realtime-test", message_data)
+                        insert_document("structured_products", message_data)
                     else:
-                        update_document_if_not_updated_by_seller("structured_products-realtime-test",
+                        update_document_if_not_updated_by_seller("structured_products",
                             {'message_id': message_data['message_id'], 'telegram_channel_id': message_data['telegram_channel_id']},
                             message_data
                         )
@@ -557,7 +557,7 @@ async def realtimeRunner():
             logger.info(f"Deleted messages: {deleted_messages} from {chat.username}")
             if chat_id:
                 for msg_id in deleted_messages:
-                    res = delete_document('structured_products-realtime-test', {"telegram_channel_id": chat_id, "message_id": msg_id})
+                    res = delete_document('structured_products', {"telegram_channel_id": chat_id, "message_id": msg_id})
                     if res:
                         logger.info(f"Deleted message {msg_id} from {chat.username}")
                     else:
