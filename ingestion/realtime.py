@@ -191,7 +191,7 @@ async def fetch_channel_info(channel_id, entity):
         return None
 
 async def refresh_channels_periodically(client, interval_hours=24):
-    global all_channels
+    global all_channels, channel_id_to_full_info_map
     me = await request_with_rate_limit(client.get_me)
     while True:
         all_channels = fetch_all_channels()
@@ -213,11 +213,14 @@ async def refresh_channels_periodically(client, interval_hours=24):
                         logger.info(f"Skipping update for channel {channel_id} as it is already updated by seller.")
                         continue 
 
-                    update_document("channels-realtime-test", { "telegram_id": channel_id }, full_channel_info)
+                    upsert_id = update_document("channels-realtime-test", { "telegram_id": channel_id }, full_channel_info)
+                    if upsert_id:
+                        full_channel_info['_id'] = upsert_id
+                    else:
+                        full_channel_info['_id'] = channel_id_to_full_info_map.get(channel_id, {}).get('_id', None)
                     channel_id_to_full_info_map[channel_id] = full_channel_info
                     break
                 except Exception as e:
-                    ERRORS.inc()
                     username = channel_id_to_full_info_map.get(channel_id, {}).get('username', '')
                     if username:
                         try:

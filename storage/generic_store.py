@@ -83,6 +83,8 @@ def update_document(collection_name, filter_query, update_query):
                 logger.info(f"Inserted new document with ID: {result.upserted_id}")
             else:
                 logger.info(f"Updated {result.modified_count} document(s)")
+            # return _id
+            return result.upserted_id if result.upserted_id else None
         else:
             logger.info("No documents matched the filter and no new document inserted.")
     except Exception as e:
