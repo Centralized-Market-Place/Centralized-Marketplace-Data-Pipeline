@@ -324,7 +324,7 @@ async def periodic_chat_update(limit):
         try:
             entity = await request_with_rate_limit(client.get_entity, channel_id)
 
-            for _ in range(3):
+            for _ in range(1):
                 if last_fetched_id is not None:
                     async with rate_limit_lock:
                         current_time = asyncio.get_event_loop().time()
@@ -382,7 +382,7 @@ async def periodic_chat_update(limit):
                             # Always enqueue messages as a list of (message, entity, 2) tuples
                             
                             if not message.grouped_id:
-                                
+
                                 await message_queue.put([(message, entity, 2)])
                                 logger.info(f"Enqueued single message {message.id} from {channel_id} for processing.")
                             else:
@@ -520,7 +520,7 @@ async def realtimeRunner():
     await client.start()
     asyncio.create_task(refresh_channels_periodically(client))
     asyncio.create_task(image_worker(client))
-    await asyncio.sleep(10*60)
+    await asyncio.sleep(8*60)
     asyncio.create_task(periodic_chat_update_runner())
     await asyncio.sleep(2)
     def is_watched_channel(event):
