@@ -348,7 +348,8 @@ async def periodic_chat_update(limit):
             ERRORS.inc()
             logger.error(f"Error fetching messages for channel {channel_id}: {e}")
             continue
-
+        
+        logger.info(f"Fetched {len(old_messages)} messages from channel {channel_id}.")
         groups = defaultdict(list)
         for message in old_messages:
             try:
@@ -385,6 +386,7 @@ async def periodic_chat_update(limit):
                 ERRORS.inc()
                 logger.error(f"Error processing message: {e}")
 
+        logger.info(f"Processing {len(groups)} old message groups from channel {channel_id}.")
         for grouped_id, messages in groups.items():
             await message_queue.put(messages)
 
