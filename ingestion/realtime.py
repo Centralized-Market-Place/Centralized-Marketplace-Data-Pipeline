@@ -17,7 +17,7 @@ import time
 # custom
 from processing.extractor import extract
 from storage.generic_store import insert_document, update_document, update_document_if_not_updated_by_seller, delete_document, find_documents
-from ingestion.image_upload import upload_with_eviction, upload_channel_thumbnail
+from storage.image_upload import upload_with_eviction, upload_channel_thumbnail
 
 # Start Prometheus metrics server on port 9000
 start_http_server(9000)

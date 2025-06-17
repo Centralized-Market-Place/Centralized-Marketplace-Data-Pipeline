@@ -29,9 +29,6 @@ ch.setFormatter(logging.Formatter('%(asctime)s %(levelname)s %(name)s %(message)
 logger.addHandler(fh)
 logger.addHandler(ch)
 
-# === API Constants ===
-# API_KEY = "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"      # Gelo
-
 
 # Initialize Groq client
 groq_client = Groq(
