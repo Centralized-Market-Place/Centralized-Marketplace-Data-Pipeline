@@ -32,7 +32,7 @@ start_http_server(9000)
 
 MESSAGES_PROCESSED = Counter('messages_processed_total', 'Total messages processed')
 MESSAGES_SKIPPED = Counter('messages_skipped_total', 'Messages skipped (duplicates/unchanged)')
-ALBUMS_PROCESSED = Counter('albums_processed_total', 'Albums processed')
+# ALBUMS_PROCESSED = Counter('albums_processed_total', 'Albums processed')
 QUEUE_SIZE = Gauge('message_queue_size', 'Current message queue size')
 API_CALLS = Counter('telegram_api_calls_total', 'Telegram API calls made')
 RATE_LIMITS = Counter('rate_limit_events_total', 'Rate limit (FloodWait) events')
@@ -130,7 +130,7 @@ def fetch_all_channels(collection_name='channels'):
     except Exception as e:
         ERRORS.inc()
         logger.error(str(e))
-        handle_issue(f"Error fetching all channels: {str(e)}")
+        handle_issue_sync(f"Error fetching all channels: {str(e)}")
     return []
 
 all_channels = []
@@ -144,7 +144,7 @@ async def is_participant(channel, user) -> bool:
     except Exception as e:
         ERRORS.inc()
         logger.error(f"Error in is_participant: {e}")
-        handle_issue(f"Error checking participant status: {str(e)}")
+        handle_issue_sync(f"Error checking participant status: {str(e)}")
         return False
 
 async def get_channel_about_and_participants_count(channel):
@@ -166,7 +166,7 @@ async def download_channel_thumbnail(channel, channel_id):
     except Exception as e:
         ERRORS.inc()
         logger.error(f"Thumbnail upload failed for {channel.title}: {str(e)}")
-        handle_issue(f"Error uploading channel thumbnail for {channel.title}: {str(e)}")
+        handle_issue_sync(f"Error uploading channel thumbnail for {channel.title}: {str(e)}")
         return None, None
 
 async def fetch_channel_info(channel_id, entity):
@@ -194,7 +194,7 @@ async def fetch_channel_info(channel_id, entity):
     except Exception as e:
         ERRORS.inc()
         logger.error(f"Error fetching channel info: {str(e)}")
-        handle_issue(f"Error fetching channel info for {channel_id}: {str(e)}")
+        handle_issue_sync(f"Error fetching channel info for {channel_id}: {str(e)}")
         return None
 
 async def refresh_channels_periodically(client, interval_hours=24):
@@ -252,7 +252,7 @@ async def process_album(grouped_id, chat_id):
         album_timers.pop(key)
     if messages:
         logger.info(f"Album timeout reached: queueing album from channel={chat_id} with grouped_id={grouped_id}, {len(messages)} parts")
-        ALBUMS_PROCESSED.inc()
+        # ALBUMS_PROCESSED.inc()
         await message_queue.put(messages) 
 
 def schedule_album_processing(grouped_id, chat_id):
@@ -319,7 +319,7 @@ def extract_message_data(message_obj, channel_mongo_id):
     except Exception as e:
         ERRORS.inc()
         logger.error(f"Error processing message: {e}")
-        handle_issue(f"Error extracting message data: {str(e)}")
+        handle_issue_sync(f"Error extracting message data: {str(e)}")
         return None
 
 async def periodic_chat_update(limit):
@@ -358,7 +358,7 @@ async def periodic_chat_update(limit):
         except Exception as e:
             ERRORS.inc()
             logger.error(f"Error fetching messages for channel {channel_id}: {e}")
-            handle_issue(f"Error fetching messages for channel {channel_id}: {str(e)}")
+            handle_issue_sync(f"Error fetching messages for channel {channel_id}: {str(e)}")
             continue
         
         logger.info(f"Fetched {len(old_messages)} messages from channel {channel_id}.")
@@ -403,7 +403,7 @@ async def periodic_chat_update(limit):
             except Exception as e:
                 ERRORS.inc()
                 logger.error(f"Error processing message: {e}")
-                handle_issue(f"Error processing message {message.id} in channel {channel_id}: {str(e)}")
+                handle_issue_sync(f"Error processing message {message.id} in channel {channel_id}: {str(e)}")
 
         logger.info(f"Processing {len(groups)} old message groups from channel {channel_id}.")
         for grouped_id, messages in groups.items():
@@ -417,7 +417,7 @@ async def periodic_chat_update_runner():
             logger.info(f"Completed periodic chat update at {datetime.now(timezone.utc)}")
         except Exception as e:
             ERRORS.inc()
-            handle_issue(f"Error in periodic chat update: {str(e)}")
+            handle_issue_sync(f"Error in periodic chat update: {str(e)}")
             logger.error(f"Periodic chat update failed: {e}")
 
         await asyncio.sleep(24 * 3600)
@@ -501,7 +501,7 @@ async def image_worker(tg_client):
                                         FAILED_DOWNLOADS.inc()
                                         ERRORS.inc()
                                         logger.error(f"Error downloading/uploading/removing image: {e}")
-                                        handle_issue(f"Error processing image for message {message.id} from {chat.username}: {str(e)}")
+                                        handle_issue_sync(f"Error processing image for message {message.id} from {chat.username}: {str(e)}")
                                     finally:
                                         if file and os.path.exists(file):
                                             os.remove(file)
@@ -513,7 +513,7 @@ async def image_worker(tg_client):
                                 logger.warning(f"No media in message {message.id} from {chat.username}")
                         except Exception as e:
                             ERRORS.inc()
-                            handle_issue(f"Error processing message {message.id} from {chat.username}: {str(e)}")
+                            handle_issue_sync(f"Error processing message {message.id} from {chat.username}: {str(e)}")
                             logger.error(f"Error processing message: {e}")
 
                     message_data['images'] = images
@@ -558,7 +558,7 @@ async def realtimeRunner():
                 logger.info(f"{message.id} enqueued from {chat.username}")
         except Exception as e:
             ERRORS.inc()
-            handle_issue(f"Error processing new message: {str(e)}")
+            handle_issue_sync(f"Error processing new message: {str(e)}")
             logger.error(f"Error processing new message: {e}")
 
     await asyncio.sleep(2)
@@ -578,7 +578,7 @@ async def realtimeRunner():
                 logger.info(f"{message.id} edited and enqueued from {chat.username}")
         except Exception as e:
             ERRORS.inc()
-            handle_issue(f"Error processing edited message: {str(e)}")
+            handle_issue_sync(f"Error processing edited message: {str(e)}")
             logger.error(f"Error processing edited message: {e}")
     await asyncio.sleep(2)
 
@@ -598,7 +598,7 @@ async def realtimeRunner():
                         logger.info(f"Document not in DB")
         except Exception as e:
             ERRORS.inc()
-            handle_issue(f"Error processing deleted message: {str(e)}")
+            handle_issue_sync(f"Error processing deleted message: {str(e)}")
             logger.error(f"Error processing deleted message: {e}")
 
     await asyncio.sleep(2)
