@@ -13,6 +13,9 @@ from bson import ObjectId
 from prometheus_client import start_http_server, Counter, Gauge, Histogram
 import time
 
+from issue_handler import handle_issue
+
+
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -127,6 +130,7 @@ def fetch_all_channels(collection_name='channels'):
     except Exception as e:
         ERRORS.inc()
         logger.error(str(e))
+        handle_issue(f"Error fetching all channels: {str(e)}")
     return []
 
 all_channels = []
@@ -140,6 +144,7 @@ async def is_participant(channel, user) -> bool:
     except Exception as e:
         ERRORS.inc()
         logger.error(f"Error in is_participant: {e}")
+        handle_issue(f"Error checking participant status: {str(e)}")
         return False
 
 async def get_channel_about_and_participants_count(channel):
@@ -161,6 +166,7 @@ async def download_channel_thumbnail(channel, channel_id):
     except Exception as e:
         ERRORS.inc()
         logger.error(f"Thumbnail upload failed for {channel.title}: {str(e)}")
+        handle_issue(f"Error uploading channel thumbnail for {channel.title}: {str(e)}")
         return None, None
 
 async def fetch_channel_info(channel_id, entity):
@@ -188,6 +194,7 @@ async def fetch_channel_info(channel_id, entity):
     except Exception as e:
         ERRORS.inc()
         logger.error(f"Error fetching channel info: {str(e)}")
+        handle_issue(f"Error fetching channel info for {channel_id}: {str(e)}")
         return None
 
 async def refresh_channels_periodically(client, interval_hours=24):
@@ -312,6 +319,7 @@ def extract_message_data(message_obj, channel_mongo_id):
     except Exception as e:
         ERRORS.inc()
         logger.error(f"Error processing message: {e}")
+        handle_issue(f"Error extracting message data: {str(e)}")
         return None
 
 async def periodic_chat_update(limit):
@@ -350,6 +358,7 @@ async def periodic_chat_update(limit):
         except Exception as e:
             ERRORS.inc()
             logger.error(f"Error fetching messages for channel {channel_id}: {e}")
+            handle_issue(f"Error fetching messages for channel {channel_id}: {str(e)}")
             continue
         
         logger.info(f"Fetched {len(old_messages)} messages from channel {channel_id}.")
@@ -394,6 +403,7 @@ async def periodic_chat_update(limit):
             except Exception as e:
                 ERRORS.inc()
                 logger.error(f"Error processing message: {e}")
+                handle_issue(f"Error processing message {message.id} in channel {channel_id}: {str(e)}")
 
         logger.info(f"Processing {len(groups)} old message groups from channel {channel_id}.")
         for grouped_id, messages in groups.items():
@@ -407,7 +417,9 @@ async def periodic_chat_update_runner():
             logger.info(f"Completed periodic chat update at {datetime.now(timezone.utc)}")
         except Exception as e:
             ERRORS.inc()
+            handle_issue(f"Error in periodic chat update: {str(e)}")
             logger.error(f"Periodic chat update failed: {e}")
+
         await asyncio.sleep(24 * 3600)
 
 async def image_worker(tg_client):
@@ -489,6 +501,7 @@ async def image_worker(tg_client):
                                         FAILED_DOWNLOADS.inc()
                                         ERRORS.inc()
                                         logger.error(f"Error downloading/uploading/removing image: {e}")
+                                        handle_issue(f"Error processing image for message {message.id} from {chat.username}: {str(e)}")
                                     finally:
                                         if file and os.path.exists(file):
                                             os.remove(file)
@@ -500,7 +513,9 @@ async def image_worker(tg_client):
                                 logger.warning(f"No media in message {message.id} from {chat.username}")
                         except Exception as e:
                             ERRORS.inc()
+                            handle_issue(f"Error processing message {message.id} from {chat.username}: {str(e)}")
                             logger.error(f"Error processing message: {e}")
+
                     message_data['images'] = images
                     if process_type == 0 or process_type == 2:
                         insert_document("structured_products", message_data)
@@ -543,7 +558,9 @@ async def realtimeRunner():
                 logger.info(f"{message.id} enqueued from {chat.username}")
         except Exception as e:
             ERRORS.inc()
+            handle_issue(f"Error processing new message: {str(e)}")
             logger.error(f"Error processing new message: {e}")
+
     await asyncio.sleep(2)
 
     @client.on(events.MessageEdited(func=is_watched_channel))
@@ -561,6 +578,7 @@ async def realtimeRunner():
                 logger.info(f"{message.id} edited and enqueued from {chat.username}")
         except Exception as e:
             ERRORS.inc()
+            handle_issue(f"Error processing edited message: {str(e)}")
             logger.error(f"Error processing edited message: {e}")
     await asyncio.sleep(2)
 
@@ -580,7 +598,9 @@ async def realtimeRunner():
                         logger.info(f"Document not in DB")
         except Exception as e:
             ERRORS.inc()
+            handle_issue(f"Error processing deleted message: {str(e)}")
             logger.error(f"Error processing deleted message: {e}")
+            
     await asyncio.sleep(2)
     logger.info("Listening for new messages...")
     await client.run_until_disconnected()
