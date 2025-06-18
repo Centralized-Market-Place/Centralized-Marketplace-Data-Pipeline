@@ -13,7 +13,7 @@ from bson import ObjectId
 from prometheus_client import start_http_server, Counter, Gauge, Histogram
 import time
 
-from issue_handler import handle_issue
+from issue_handler import handle_issue_sync
 
 
 from dotenv import load_dotenv
@@ -600,7 +600,7 @@ async def realtimeRunner():
             ERRORS.inc()
             handle_issue(f"Error processing deleted message: {str(e)}")
             logger.error(f"Error processing deleted message: {e}")
-            
+
     await asyncio.sleep(2)
     logger.info("Listening for new messages...")
     await client.run_until_disconnected()
